@@ -77,11 +77,11 @@ export default function Sidebar() {
 
       {/* Navigasyon */}
       <nav className="flex-1 space-y-1">
-        {navItems.map((item) => {
+        {navItems.map((item,index) => {
           const Icon = item.icon;
           return (
             <Link
-              key={item.href}
+              key={index}
               href={item.href}
               className={`flex items-center px-4 py-3 text-base transition-colors hover:bg-primary/10 ${
                 isActive(item.href) 

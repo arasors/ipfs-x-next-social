@@ -14,6 +14,9 @@ importers:
       '@helia/json':
         specifier: ^4.0.3
         version: 4.0.3
+      '@helia/strings':
+        specifier: ^4.0.3
+        version: 4.0.3
       '@helia/unixfs':
         specifier: ^4.0.3
         version: 4.0.3
@@ -116,6 +119,9 @@ importers:
       '@types/js-cookie':
         specifier: ^3.0.6
         version: 3.0.6
+      '@types/pako':
+        specifier: ^2.0.3
+        version: 2.0.3
       '@types/react-dropzone':
         specifier: ^5.1.0
         version: 5.1.0(react@19.0.0)
@@ -131,6 +137,9 @@ importers:
       axios:
         specifier: ^1.8.2
         version: 1.8.2(debug@4.4.0)
+      blockstore-core:
+        specifier: ^5.0.2
+        version: 5.0.2
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -143,6 +152,9 @@ importers:
       connectkit:
         specifier: ^1.8.2
         version: 1.8.2(@babel/core@7.26.10)(@tanstack/react-query@5.69.0(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react-is@18.3.1)(react@19.0.0)(viem@2.23.13(bufferutil@4.0.9)(typescript@5.8.2)(utf-8-validate@5.0.10)(zod@3.24.2))(wagmi@2.14.15(@tanstack/query-core@5.69.0)(@tanstack/react-query@5.69.0(react@19.0.0))(@types/react@19.0.10)(bufferutil@4.0.9)(react@19.0.0)(typescript@5.8.2)(utf-8-validate@5.0.10)(viem@2.23.13(bufferutil@4.0.9)(typescript@5.8.2)(utf-8-validate@5.0.10)(zod@3.24.2))(zod@3.24.2))
+      datastore-core:
+        specifier: ^10.0.2
+        version: 10.0.2
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -188,6 +200,9 @@ importers:
       next-themes:
         specifier: ^0.4.5
         version: 0.4.5(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      pako:
+        specifier: ^2.1.0
+        version: 2.1.0
       qrcode.react:
         specifier: ^4.2.0
         version: 4.2.0(react@19.0.0)
@@ -1383,6 +1398,9 @@ packages:
 
   '@helia/routers@3.0.1':
     resolution: {integrity: sha512-Eshr/8XJU4c0H8s1m5oBFB2YM0n3HBbxB3ny8DbsRFS8cAQ/L8ujnQomniMjZuuOhcNz8EEGwkUc07HCtAqAFA==}
+
+  '@helia/strings@4.0.3':
+    resolution: {integrity: sha512-O5HOYvrRLxTA7TPtwgH/zBAJZae7CHiFY0ncWjBny/44C52GMheHXrplc3KLB1/PPRCpfUt2oL7Wuj1ag8UEbw==}
 
   '@helia/unixfs@4.0.3':
     resolution: {integrity: sha512-sbcnS64B6LCTHrGH6RPx2BuwLFjmVAoiX53RR/E0YCQMcHTDCF4bQ3I7P+7kzYkQLQkbLEekl7V2fnVOWxG7MA==}
@@ -3120,6 +3138,9 @@ packages:
 
   '@types/node@22.7.5':
     resolution: {integrity: sha512-jML7s2NAzMWc//QSJ1a3prpk78cOPchGvXJsC3C6R6PSMoooztvRVQEz89gmBTBY1SPMaqo5teB4uNHPdetShQ==}
+
+  '@types/pako@2.0.3':
+    resolution: {integrity: sha512-bq0hMV9opAcrmE0Byyo0fY3Ew4tgOevJmQ9grUhpXQhYfyLJ1Kqg3P33JT5fdbT2AjeAjR51zqqVjAL/HMkx7Q==}
 
   '@types/react-dom@19.0.4':
     resolution: {integrity: sha512-4fSQ8vWFkg+TGhePfUzVmat3eC14TXYSsiiDSLI0dVLsrm9gZFABjPy/Qu6TKgl1tq1Bu1yDsuQgY3A3DOjCcg==}
@@ -5787,6 +5808,9 @@ packages:
   p-wait-for@5.0.2:
     resolution: {integrity: sha512-lwx6u1CotQYPVju77R+D0vFomni/AqRfqLmqQ8hekklqZ6gAY9rONh7lBQ0uxWMkC2AuX9b2DVAl8To0NyP1JA==}
     engines: {node: '>=12'}
+
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
 
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
@@ -8807,6 +8831,15 @@ snapshots:
       multiformats: 13.3.2
       uint8arrays: 5.1.0
 
+  '@helia/strings@4.0.3':
+    dependencies:
+      '@helia/interface': 5.2.1
+      '@libp2p/interface': 2.7.0
+      interface-blockstore: 5.3.1
+      multiformats: 13.3.2
+      progress-events: 1.0.1
+      uint8arrays: 5.1.0
+
   '@helia/unixfs@4.0.3':
     dependencies:
       '@helia/interface': 5.2.1
@@ -11216,6 +11249,8 @@ snapshots:
   '@types/node@22.7.5':
     dependencies:
       undici-types: 6.19.8
+
+  '@types/pako@2.0.3': {}
 
   '@types/react-dom@19.0.4(@types/react@19.0.10)':
     dependencies:
@@ -15146,6 +15181,8 @@ snapshots:
   p-wait-for@5.0.2:
     dependencies:
       p-timeout: 6.1.4
+
+  pako@2.1.0: {}
 
   parent-module@1.0.1:
     dependencies:

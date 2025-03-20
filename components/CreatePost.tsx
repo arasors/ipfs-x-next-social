@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4 } from "uuid"; 
 // IPFS fonksiyonlarını doğrudan içe aktarmıyoruz
 // import { createHeliaNode, addJsonContent } from "@/lib/ipfs";
 import { connectWallet } from "@/lib/web3auth";
@@ -217,8 +217,8 @@ export default function CreatePost() {
         
         // JSON verisini IPFS'e ekle
         setProcessMessage("Post içeriği IPFS'e kaydediliyor...");
-        const cid = await addJsonContent(jsonHandler, postData);
-        contentCIDString = cid.toString();
+        const cid = await addJsonContent(postData);
+        contentCIDString = cid?.toString() || "";
         
         // IPFS CID'sini sakla ve paylaşım URL'ini oluştur
         setPostCID(contentCIDString);
@@ -313,7 +313,7 @@ export default function CreatePost() {
             className="h-8 w-8"
             onClick={() => removeFile(index)}
           >
-            <span className="sr-only">Kaldır</span>
+            <span className="sr-only">Remove</span>
             ×
           </Button>
         </div>
@@ -325,10 +325,10 @@ export default function CreatePost() {
     <>
       <form onSubmit={handleSubmit} className="space-y-4 bg-card p-4 rounded-lg shadow">
         <div>
-          <Label htmlFor="content">Mesajınız</Label>
+          <Label htmlFor="content">Your text</Label>
           <Textarea
             id="content"
-            placeholder="Ne düşünüyorsunuz?"
+            placeholder="What are you thinking?"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={3}
@@ -339,7 +339,7 @@ export default function CreatePost() {
         {/* Dosya önizleme alanı */}
         {mediaFiles.length > 0 && (
           <div className="space-y-2">
-            <Label>Yüklenen Medyalar</Label>
+            <Label>Uploaded Media</Label>
             <div className="max-h-60 overflow-y-auto">
               {mediaFiles.map((file, index) => renderPreview(file, index))}
             </div>
@@ -354,16 +354,16 @@ export default function CreatePost() {
         >
           <input {...getInputProps()} />
           {isUploading ? (
-            <p className="text-sm text-gray-500">Dosyalar yükleniyor...</p>
+            <p className="text-sm text-gray-500">Files are uploading...</p>
           ) : isDragActive ? (
-            <p className="text-sm text-blue-500">Dosyaları buraya bırakın...</p>
+            <p className="text-sm text-blue-500">Drop files here...</p>
           ) : (
             <div>
               <p className="text-sm text-gray-500">
-                Dosya eklemek için tıklayın veya sürükleyip bırakın
+                Click to add files or drag and drop
               </p>
               <p className="text-xs text-gray-400 mt-1">
-                Resim, video ve doküman (5 dosyaya kadar)
+                Image, video and document (5 files max)
               </p>
             </div>
           )}
@@ -378,12 +378,12 @@ export default function CreatePost() {
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Gönderiliyor...</span>
+                <span>Sending...</span>
               </>
             ) : (
               <>
                 <Share2 className="h-4 w-4" />
-                <span>Paylaş</span>
+                <span>Share</span>
               </>
             )}
           </Button>
@@ -395,14 +395,14 @@ export default function CreatePost() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {processStatus === 'uploading' && "Post Gönderiliyor..."}
-              {processStatus === 'success' && "Post Başarıyla Gönderildi!"}
-              {processStatus === 'error' && "Gönderim Sırasında Hata Oluştu"}
+              {processStatus === 'uploading' && "Post Sending..."}
+              {processStatus === 'success' && "Post Successfully Sent!"}
+              {processStatus === 'error' && "Error during sending"}
             </DialogTitle>
             <DialogDescription>
-              {processStatus === 'uploading' && "Postunuz IPFS ağına yükleniyor, lütfen bekleyin."}
-              {processStatus === 'success' && "Postunuz başarıyla IPFS ağına kaydedildi ve paylaşıldı."}
-              {processStatus === 'error' && "IPFS ağına yüklenirken bir hata oluştu. Post sadece yerel olarak kaydedildi."}
+              {processStatus === 'uploading' && "Your post is being uploaded to the IPFS network, please wait."}
+              {processStatus === 'success' && "Your post has been successfully uploaded to the IPFS network and shared."}
+              {processStatus === 'error' && "An error occurred while uploading to the IPFS network. The post was only saved locally."}
             </DialogDescription>
           </DialogHeader>
           
@@ -434,7 +434,7 @@ export default function CreatePost() {
                 </div>
                 
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">IPFS İçerik Tanımlayıcısı (CID):</p>
+                  <p className="text-sm font-medium">IPFS Content Identifier (CID):</p>
                   <div className="flex items-center space-x-2">
                     <input className="bg-zinc-100 p-2 rounded text-xs flex-1 truncate dark:bg-gray-800" value={postCID} readOnly />
                     <Button 
@@ -451,7 +451,7 @@ export default function CreatePost() {
                 </div>
                 
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">IPFS Bağlantısı:</p>
+                  <p className="text-sm font-medium">IPFS Link:</p>
                   <div className="flex items-center space-x-2">
                     <input className="bg-zinc-100 p-2 rounded text-xs flex-1 truncate dark:bg-gray-800" value={ipfsShareUrl} readOnly />
                     <Button size="sm" variant="outline" onClick={copyToClipboard}>
@@ -487,17 +487,17 @@ export default function CreatePost() {
                 <Button variant="outline" size="sm" asChild>
                   <a href={ipfsShareUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">
                     <ExternalLink className="h-4 w-4" />
-                    <span>IPFS'te Görüntüle</span>
+                    <span>View on IPFS</span>
                   </a>
                 </Button>
                 <Button size="sm" onClick={copyToClipboard} className="flex items-center gap-1">
                   <Copy className="h-4 w-4" />
-                  <span>Bağlantıyı Kopyala</span>
+                  <span>Copy Link</span>
                 </Button>
               </div>
             )}
             <Button variant="ghost" size="sm" onClick={closeDialog}>
-              Kapat
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
