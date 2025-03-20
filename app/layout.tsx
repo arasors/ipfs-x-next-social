@@ -51,7 +51,7 @@ export default function RootLayout({
               </div>
               
               {/* Ana içerik alanı */}
-              <div className="flex-1 min-h-screen">
+              <div className="flex-1 min-h-screen pl-8">
                 {children}
               </div>
             </div>

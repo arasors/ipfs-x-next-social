@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import { Post } from '@/models/Post';
+import { Post, Comment } from '@/models/Post';
 
 interface PostState {
   posts: Post[];
@@ -9,7 +9,7 @@ interface PostState {
   addPost: (post: Omit<Post, 'id'>) => void;
   likePost: (postId: string) => void;
   getPosts: () => Post[];
-  addComment: (postId: string, comment: any) => void;
+  addComment: (postId: string, comment: Comment) => void;
   reset: () => void;
 }
 

@@ -9,14 +9,17 @@ This document outlines the upcoming tasks and features for the IPFS-X project.
   - [ ] Implement persistent sessions
   - [ ] Add wallet connection error handling
 
-- [ ] **IPFS Integration Enhancements**
-  - [ ] Optimize media upload performance
-  - [ ] Add file compression before IPFS upload
-  - [ ] Implement content pinning to ensure persistence
-  - [ ] Add IPFS gateway fallback mechanism
+- [x] **IPFS Integration Enhancements**
+  - [x] Optimize media upload performance
+  - [x] Add file compression before IPFS upload
+  - [x] Implement content pinning to ensure persistence
+  - [x] Add IPFS gateway fallback mechanism
+  - [x] Add upload progress indicator
+  - [x] Create media preview components with fallback
 
 - [ ] **Core Features**
-  - [ ] Implement comment functionality
+  - [x] Create post detail page
+  - [x] Implement comment functionality
   - [ ] Create notification system
   - [ ] Add user following/follower system
   - [ ] Implement search functionality
@@ -26,12 +29,12 @@ This document outlines the upcoming tasks and features for the IPFS-X project.
 - [ ] **UI/UX Improvements**
   - [ ] Add dark/light theme toggle
   - [ ] Implement infinite scroll for post feeds
-  - [ ] Create skeleton loaders for better loading experience
+  - [x] Create skeleton loaders for better loading experience
   - [ ] Improve mobile UI/UX
 
 - [ ] **Media Support**
-  - [ ] Add audio file support
-  - [ ] Implement media preview optimization
+  - [x] Add audio file support
+  - [x] Implement media preview optimization
   - [ ] Add media carousel for multiple files in a post
   - [ ] Create media folder organization
 

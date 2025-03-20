@@ -6,6 +6,11 @@ import { formatDistanceToNow } from "date-fns";
 import { tr } from "date-fns/locale";
 // @ts-ignore
 import { FileIcon, defaultStyles } from 'react-file-icon';
+import Link from 'next/link';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { MessageSquare, Heart, Share2, Bookmark, MoreHorizontal } from 'lucide-react';
+import { MediaPreview } from '@/lib/components/MediaPreview';
 
 interface PostItemProps {
   post: Post;
@@ -15,6 +20,7 @@ interface PostItemProps {
 export default function PostItem({ post, onLike }: PostItemProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<{ [key: string]: string }>({});
+  const [saved, setSaved] = useState(false);
 
   // Post verilerini kontrol et
   if (!post) {
@@ -105,175 +111,118 @@ export default function PostItem({ post, onLike }: PostItemProps) {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  // Medya öğesini görüntüle
-  const renderMediaItem = (type: string, url: string, index: number) => {
-    if (type === 'image') {
-      return (
-        <img 
-          key={`media-${index}`}
-          src={url} 
-          alt={`Post medyası ${index + 1}`} 
-          className="w-full rounded-md max-h-96 object-cover mb-2"
-          onError={(e) => {
-            console.error('Resim yüklenemedi:', url);
-            e.currentTarget.style.display = 'none';
-          }}
-        />
-      );
-    } else if (type === 'video') {
-      return (
-        <video 
-          key={`media-${index}`}
-          src={url}
-          controls
-          className="w-full rounded-md max-h-96 mb-2"
-          onError={(e) => {
-            console.error('Video yüklenemedi:', url);
-            e.currentTarget.style.display = 'none';
-          }}
-        />
-      );
-    } else if (type === 'document') {
-      const extension = url.split('.').pop() || '';
-      return (
-        <div key={`media-${index}`} className="flex items-center p-2 border rounded mb-2">
-          <div className="w-10 h-10 mr-2">
-          <FileIcon extension={extension} {...(defaultStyles?.[extension as keyof typeof defaultStyles]!)} />
-          </div>
-          <a 
-            href={url} 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-blue-500 hover:underline"
-          >
-            Dokümanı Görüntüle
-          </a>
-        </div>
-      );
-    }
-    return null;
+  // Handle save
+  const handleSave = () => {
+    setSaved(!saved);
   };
 
   return (
-    <article className="bg-card p-4 rounded-lg shadow">
-      <div className="flex justify-between">
-        <div className="flex items-center space-x-2">
-          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white">
-            {post.authorName ? post.authorName[0].toUpperCase() : "A"}
+    <Card className="mb-4 overflow-hidden">
+      <CardHeader className="py-4 px-4 flex-row items-center gap-3">
+        <Avatar>
+          <AvatarImage src={`https://avatar.vercel.sh/${post.authorName || post.authorAddress}`} />
+          <AvatarFallback>{post.authorName ? post.authorName[0].toUpperCase() : "A"}</AvatarFallback>
+        </Avatar>
+        <div className="flex flex-col">
+          <Link href={`/profile/${post.authorAddress}`} className="font-medium text-sm hover:underline">
+            {shortenAddress(post.authorAddress)}
+          </Link>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{formatDate(post.timestamp)}</span>
+            {post.category && (
+              <span className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">
+                {post.category}
+              </span>
+            )}
           </div>
-          <div>
-            <h3 className="font-medium">
-              {post.authorName || shortenAddress(post.authorAddress)}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {formatDate(post.timestamp)}
-            </p>
+        </div>
+        <Button variant="ghost" size="icon" className="ml-auto rounded-full" asChild>
+          <Link href={`/post/${post.id}`}>
+            <MoreHorizontal className="h-4 w-4" />
+            <span className="sr-only">Daha Fazla</span>
+          </Link>
+        </Button>
+      </CardHeader>
+      
+      <CardContent className="px-4 py-0">
+        <div className="pb-4">
+          <p className="whitespace-pre-wrap text-sm">{post.content}</p>
+        </div>
+        
+        {/* Eski medya görüntüleme sistemi */}
+        {mediaUrls.legacy && post.mediaType && (
+          <div className="mt-4">
+            {post.mediaType === 'image' && (
+              <img 
+                src={mediaUrls.legacy} 
+                alt="Post içeriği" 
+                className="w-full rounded-md max-h-96 object-cover"
+                onError={(e) => {
+                  console.error('Resim yüklenemedi:', mediaUrls.legacy);
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            )}
+            {post.mediaType === 'video' && (
+              <video 
+                src={mediaUrls.legacy}
+                controls
+                className="w-full rounded-md max-h-96"
+                onError={(e) => {
+                  console.error('Video yüklenemedi:', mediaUrls.legacy);
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            )}
           </div>
-        </div>
-      </div>
+        )}
 
-      <div className="mt-4">
-        <p className="whitespace-pre-wrap">{post.content}</p>
-      </div>
-
-      {/* Eski medya görüntüleme sistemi */}
-      {mediaUrls.legacy && post.mediaType && (
-        <div className="mt-4">
-          {post.mediaType === 'image' && (
-            <img 
-              src={mediaUrls.legacy} 
-              alt="Post içeriği" 
-              className="w-full rounded-md max-h-96 object-cover"
-              onError={(e) => {
-                console.error('Resim yüklenemedi:', mediaUrls.legacy);
-                e.currentTarget.style.display = 'none';
-              }}
-            />
-          )}
-          {post.mediaType === 'video' && (
-            <video 
-              src={mediaUrls.legacy}
-              controls
-              className="w-full rounded-md max-h-96"
-              onError={(e) => {
-                console.error('Video yüklenemedi:', mediaUrls.legacy);
-                e.currentTarget.style.display = 'none';
-              }}
-            />
-          )}
-        </div>
-      )}
-
-      {/* Yeni çoklu medya görüntüleme sistemi */}
-      {post.mediaItems && post.mediaItems.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {post.mediaItems.map((item, index) => (
-            item.contentCID && mediaUrls[`item-${index}`] ? 
-              renderMediaItem(item.type, mediaUrls[`item-${index}`], index) : null
-          ))}
-        </div>
-      )}
-
-      <div className="mt-4 flex items-center space-x-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleLike}
-          className={isLiked ? "text-red-500" : ""}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 mr-1"
-            fill={isLiked ? "currentColor" : "none"}
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-            />
-          </svg>
-          <span>{post.likes}</span>
+        {/* Yeni çoklu medya görüntüleme sistemi */}
+        {post.mediaItems && post.mediaItems.length > 0 && (
+          <div className={`grid ${post.mediaItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-2 pb-4`}>
+            {post.mediaItems.map((item, index) => (
+              item.contentCID && mediaUrls[`item-${index}`] ? 
+                <div key={item.contentCID} className="overflow-hidden rounded-md">
+                  <MediaPreview 
+                    cid={item.contentCID} 
+                    width={post.mediaItems.length === 1 ? 500 : 250} 
+                    height={250}
+                    className="w-full"
+                  />
+                </div>
+              : null
+            ))}
+          </div>
+        )}
+      </CardContent>
+      
+      <CardFooter className="px-4 py-3 border-t flex justify-between">
+        <Button variant="ghost" size="sm" onClick={handleLike}>
+          <Heart className={`h-4 w-4 mr-1 ${isLiked ? 'fill-destructive text-destructive' : ''}`} />
+          {post.likes || 0}
         </Button>
-
-        <Button variant="ghost" size="sm">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 mr-1"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          <span>{post.comments ? post.comments.length : 0}</span>
+        <Button variant="ghost" size="sm" asChild>
+          <Link href={`/post/${post.id}`}>
+            <MessageSquare className="h-4 w-4 mr-1" />
+            {post.comments || 0}
+          </Link>
         </Button>
-
-        <Button variant="ghost" size="sm">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5 mr-1"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
+        <Button variant="ghost" size="sm" asChild>
+          <Link 
+            href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+              `${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}\n\nIPFS-X üzerinde paylaşıldı`
+            )}`} 
+            target="_blank"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-            />
-          </svg>
-          <span>{post.reposts || 0}</span>
+            <Share2 className="h-4 w-4 mr-1" />
+            Paylaş
+          </Link>
         </Button>
-      </div>
-    </article>
+        <Button variant="ghost" size="sm" onClick={handleSave}>
+          <Bookmark className={`h-4 w-4 mr-1 ${saved ? 'fill-current' : ''}`} />
+          Kaydet
+        </Button>
+      </CardFooter>
+    </Card>
   );
 } 

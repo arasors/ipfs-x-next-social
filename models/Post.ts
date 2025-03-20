@@ -22,6 +22,8 @@ export interface Post {
   // Yeni çoklu medya desteği
   mediaItems?: MediaItem[];
   tags?: string[];
+  // Kategori bilgisi
+  category?: string;
 }
 
 export interface Comment {
@@ -59,4 +61,6 @@ export interface IPFSPost {
   // Yeni çoklu medya desteği
   mediaItems?: MediaItem[];
   tags?: string[];
+  // Kategori bilgisi
+  category?: string;
 } 

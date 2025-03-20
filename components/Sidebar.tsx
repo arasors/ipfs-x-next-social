@@ -61,7 +61,7 @@ export default function Sidebar() {
     { name: 'Explore', href: '/explore', icon: Search },
     //{ name: 'Notifications', href: '/notifications', icon: Bell },
     //{ name: 'Messages', href: '/messages', icon: MessageSquare },
-    //{ name: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
+    { name: 'Bookmarks', href: '/bookmarks', icon: Bookmark },
     { name: 'Tags', href: '#', icon: Hash },
     { name: 'Community', href: '#', icon: Users },
   ];
