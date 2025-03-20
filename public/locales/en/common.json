@@ -1,0 +1,17 @@
+{
+  "welcome": "Welcome!",
+  "greeting": "Hello, {name}!",
+  "loading": "Loading...",
+  "profile": "Profile",
+  "logout": "Logout",
+  "login": "Login",
+  "language": {
+    "title": "Language",
+    "english": "English",
+    "turkish": "Turkish",
+    "changed": {
+      "en": "Language changed to English",
+      "tr": "Language changed to Turkish"
+    }
+  }
+} 

@@ -1,0 +1,17 @@
+{
+  "welcome": "Hoş Geldiniz!",
+  "greeting": "Merhaba, {name}!",
+  "loading": "Yükleniyor...",
+  "profile": "Profil",
+  "logout": "Çıkış Yap",
+  "login": "Giriş Yap",
+  "language": {
+    "title": "Dil",
+    "english": "İngilizce",
+    "turkish": "Türkçe",
+    "changed": {
+      "en": "Dil değiştirildi: İngilizce",
+      "tr": "Dil değiştirildi: Türkçe"
+    }
+  }
+} 
