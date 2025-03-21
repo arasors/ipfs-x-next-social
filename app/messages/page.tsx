@@ -61,7 +61,7 @@ export default function MessagesPage() {
             </div>
             
             <div className="flex-grow overflow-y-auto">
-              <MessageList 
+              <MessageList
                 chats={Object.values(chats)} 
                 selectedChatId={selectedChatId} 
                 onSelectChat={selectChat} 

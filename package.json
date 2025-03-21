@@ -8,6 +8,7 @@
     "start": "next start",
     "server": "cd node-server && npm start",
     "lint": "next lint",
+    "tunnel": "cloudflare tunnel --url localhost:3000",
     "shadcn:install": "pnpm dlx shadcn@latest add button card form input label select textarea tabs checkbox switch radio-group avatar badge alert dialog dropdown-menu popover hover-card alert-dialog command sheet accordion aspect-ratio avatar badge breadcrumb button calendar card carousel checkbox collapsible command context-menu dialog drawer dropdown-menu form hover-card input label menubar navigation-menu pagination popover progress radio-group resizable scroll-area select separator sheet skeleton slider sonner switch table tabs textarea toggle toggle-group tooltip"
   },
   "dependencies": {
