@@ -22,6 +22,7 @@ interface NotificationBellProps {
   showLabel?: boolean;
   className?: string;
   side?: "top" | "right" | "bottom" | "left";
+  children?: React.ReactNode;
 }
 
 export function NotificationBell({ 
@@ -29,7 +30,8 @@ export function NotificationBell({
   iconSize = 'md', 
   showLabel = false,
   className = '',
-  side = "right"
+  side = "right",
+  children
 }: NotificationBellProps) {
   const { 
     notifications, 
@@ -80,15 +82,12 @@ export function NotificationBell({
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size={showLabel ? "default" : "icon"} className={`relative ${className}`}>
-          {showIcon && <Bell className={getIconSize()} />}
-          {showLabel && <span className="ml-2">Notifications</span>}
-          {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground flex items-center justify-center">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </Button>
+        {children ? children : (
+          <Button variant="ghost" size={showLabel ? "default" : "icon"} className={`relative ${className}`}>
+            {showIcon && <Bell className={getIconSize()} />}
+            {showLabel && <span className="ml-2">Notifications</span>}
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent side={side} className="w-full sm:max-w-md p-0">
         <div className="flex flex-col h-full">

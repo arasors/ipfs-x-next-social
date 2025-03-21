@@ -9,7 +9,7 @@ export const config = createConfig(
     // ConnectKit yapılandırması
     appName: "IPFS-X",
     walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
-    chains,
+    chains: [mainnet, sepolia],
     // Diğer seçenekler
     ssr: true,
   }),

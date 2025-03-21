@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Comment } from "@/models/Post";
+import { UserProfile } from "@/models/User";
 import { usePostStore } from "@/store/postStore";
+import { useUserStore } from "@/store/userStore";
 import { getAddressDisplay } from "@/lib/utils";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,9 +37,20 @@ interface CommentItemProps {
 
 export function CommentItem({ comment, postId }: CommentItemProps) {
   const { updateComment, removeComment } = usePostStore();
+  const { getUserProfile } = useUserStore();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const initialProfile = getUserProfile(comment.authorAddress);
+  const [author, setAuthor] = useState<UserProfile>({
+    address: comment.authorAddress,
+    username: initialProfile?.username,
+    displayName: initialProfile?.displayName,
+    profileImageCID: initialProfile?.profileImageCID,
+    followingCount: initialProfile?.followingCount || 0,
+    followersCount: initialProfile?.followersCount || 0,
+    postCount: initialProfile?.postCount || 0
+  });
   
   // Check if current user is the comment owner
   const isCurrentUserComment = () => {
@@ -72,16 +85,20 @@ export function CommentItem({ comment, postId }: CommentItemProps) {
       <div className="flex space-x-3 text-sm">
         <Avatar className="h-6 w-6">
           <AvatarImage 
-            src={`https://api.dicebear.com/7.x/shapes/svg?seed=${comment.authorAddress}`} 
-            alt={comment.authorName || comment.authorAddress}
+            src={author.profileImageCID ? 
+              `https://ipfs.io/ipfs/${author.profileImageCID}` : 
+              `https://api.dicebear.com/7.x/shapes/svg?seed=${comment.authorAddress}`}
+            alt={author.displayName || author.username || comment.authorAddress}
           />
-          <AvatarFallback>{comment.authorAddress.substring(0, 2)}</AvatarFallback>
+          <AvatarFallback>
+            {(author.displayName?.[0] || author.username?.[0] || comment.authorAddress.substring(0, 2)).toUpperCase()}
+          </AvatarFallback>
         </Avatar>
         
         <div className="flex-1">
           <div className="flex items-center space-x-2">
             <span className="font-medium">
-              {comment.authorName || getAddressDisplay(comment.authorAddress)}
+              {author.displayName || author.username || getAddressDisplay(comment.authorAddress)}
             </span>
             <span className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(comment.timestamp), { addSuffix: true })}

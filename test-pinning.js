@@ -11,9 +11,9 @@ const CONFIG = {
       {
         name: 'Pinata',
         headers: {
-          'pinata_api_key': 'f694d50e1e7f165a1715',
-          'pinata_secret_api_key': '635433cb2d4921d8b0d419e655838b10cd463e084876a1e5b9fc6ee921702646',
-          'pinata_jwt': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJhMWNjM2ZhMS1mYjRiLTRiOTctYWMzMi04ZjM0MTA4YzhlNGQiLCJlbWFpbCI6ImFyYXNpbnRoZWhlbGxAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6ImY2OTRkNTBlMWU3ZjE2NWExNzE1Iiwic2NvcGVkS2V5U2VjcmV0IjoiNjM1NDMzY2IyZDQ5MjFkOGIwZDQxOWU2NTU4MzhiMTBjZDQ2M2UwODQ4NzZhMWU1YjlmYzZlZTkyMTcwMjY0NiIsImV4cCI6MTc3NDA1MDM2Mn0.l_CudiC2WV3UwjDfts9nCQfDamOs3O08t1Y6zsaBHs4'
+          'pinata_api_key': process.env.NEXT_PUBLIC_PINATA_API_KEY,
+          'pinata_secret_api_key': process.env.NEXT_PUBLIC_PINATA_SECRET_API_KEY,
+          'pinata_jwt': process.env.NEXT_PUBLIC_PINATA_JWT
         }
       }
     ]

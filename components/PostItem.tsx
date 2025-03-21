@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { extractHashtags, linkifyHashtags } from '@/lib/hashtags';
+import { Lightbox } from '@/components/ui/lightbox';
 
 interface PostItemProps {
   post: Post;
@@ -49,7 +50,7 @@ interface PostItemProps {
 
 export default function PostItem({ post, onLike, showFullContent = false, showComments = false }: PostItemProps) {
   const { likePost, updatePost, removePost } = usePostStore();
-  const { getOrCreateUser } = useUserStore();
+  const { getUserProfile, getOrCreateUser } = useUserStore();
   const [isLiked, setIsLiked] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<{[key: string]: string}>({});
   const [saved, setSaved] = useState(false);
@@ -61,6 +62,13 @@ export default function PostItem({ post, onLike, showFullContent = false, showCo
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [author, setAuthor] = useState(getOrCreateUser(post.authorAddress));
+  
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [currentImage, setCurrentImage] = useState<string>("");
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
 
   // For client-side operations
   useEffect(() => {
@@ -231,8 +239,6 @@ export default function PostItem({ post, onLike, showFullContent = false, showCo
     }
   };
 
-  const author = getOrCreateUser(post.authorAddress);
-  
   // Format the timestamp
   const formattedTime = formatDistanceToNow(new Date(post.timestamp), { addSuffix: true });
 
@@ -332,17 +338,65 @@ export default function PostItem({ post, onLike, showFullContent = false, showCo
     }
   };
 
+  // Initialize lightbox images when mediaUrls are loaded
+  useEffect(() => {
+    const images: string[] = [];
+    
+    // Add legacy image if it exists
+    if (mediaUrls.legacy && post.mediaType === 'image') {
+      images.push(mediaUrls.legacy);
+    }
+    
+    // Add media items that are images
+    if (post.mediaItems && post.mediaItems.length > 0) {
+      Object.keys(mediaUrls)
+        .filter(key => key.startsWith('item-'))
+        .forEach(key => {
+          const index = parseInt(key.replace('item-', ''));
+          if (post.mediaItems && post.mediaItems[index] && post.mediaItems[index].type === 'image') {
+            images.push(mediaUrls[key]);
+          }
+        });
+    }
+    
+    setLightboxImages(images);
+  }, [mediaUrls, post.mediaItems, post.mediaType]);
+  
+  const openLightbox = (src: string, index: number) => {
+    setCurrentImage(src);
+    setCurrentImageIndex(index);
+    setLightboxOpen(true);
+  };
+  
+  const handlePrevImage = () => {
+    const newIndex = (currentImageIndex - 1 + lightboxImages.length) % lightboxImages.length;
+    setCurrentImageIndex(newIndex);
+    setCurrentImage(lightboxImages[newIndex]);
+  };
+  
+  const handleNextImage = () => {
+    const newIndex = (currentImageIndex + 1) % lightboxImages.length;
+    setCurrentImageIndex(newIndex);
+    setCurrentImage(lightboxImages[newIndex]);
+  };
+
   return (
     <>
       <Card className="mb-4 overflow-hidden">
         <CardHeader className="py-4 px-4 flex-row items-center gap-3">
           <Avatar>
-            <AvatarImage src={`https://avatar.vercel.sh/${post.authorName || post.authorAddress}`} />
-            <AvatarFallback>{post.authorName ? post.authorName[0].toUpperCase() : "A"}</AvatarFallback>
+            <AvatarImage 
+              src={author.profileImageCID ? 
+                `https://ipfs.io/ipfs/${author.profileImageCID}` : 
+                `https://avatar.vercel.sh/${post.authorName || post.authorAddress}`} 
+            />
+            <AvatarFallback>
+              {author.displayName?.[0] || author.username?.[0] || post.authorAddress.substring(0, 2).toUpperCase()}
+            </AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
             <Link href={`/profile/${post.authorAddress}`} className="font-medium text-sm hover:underline">
-              {shortenAddress(post.authorAddress)}
+              {author.displayName || author.username || shortenAddress(post.authorAddress)}
             </Link>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">{formatDate(post.timestamp)}</span>
@@ -418,7 +472,8 @@ export default function PostItem({ post, onLike, showFullContent = false, showCo
                 <img 
                   src={mediaUrls.legacy} 
                   alt="Post content" 
-                  className="w-full rounded-md max-h-96 object-cover"
+                  className="w-full rounded-md max-h-96 object-cover cursor-pointer"
+                  onClick={() => openLightbox(mediaUrls.legacy, 0)}
                   onError={(e) => {
                     console.error('Image could not be loaded:', mediaUrls.legacy);
                     e.currentTarget.style.display = 'none';
@@ -445,13 +500,26 @@ export default function PostItem({ post, onLike, showFullContent = false, showCo
               grid gap-2 mt-3
               ${post.mediaItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}
             `}>
-              {post.mediaItems.map((item, index) => (
-                item.contentCID 
-                  ? 
-                  <div key={item.contentCID} className="overflow-hidden rounded-md">
+              {post.mediaItems.map((item, index) => {
+                if (!item.contentCID) return null;
+                
+                const mediaUrl = mediaUrls[`item-${index}`];
+                const isImage = item.type === 'image';
+                
+                if (!mediaUrl) return null;
+                
+                // Calculate lightbox index
+                const lightboxIndex = isImage ? lightboxImages.indexOf(mediaUrl) : -1;
+                
+                return (
+                  <div 
+                    key={item.contentCID} 
+                    className={`overflow-hidden rounded-md ${isImage ? 'cursor-pointer' : ''}`}
+                    onClick={isImage ? () => openLightbox(mediaUrl, lightboxIndex) : undefined}
+                  >
                     <MediaPreview 
                       cid={item.contentCID} 
-                      width={post.mediaItems?.length === 1 ? 500 : 250} 
+                      width={post.mediaItems && post.mediaItems.length === 1 ? 500 : 250} 
                       height={250}
                       className="w-full"
                       mimeType={
@@ -462,8 +530,8 @@ export default function PostItem({ post, onLike, showFullContent = false, showCo
                       }
                     />
                   </div>
-                : null
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -524,6 +592,18 @@ export default function PostItem({ post, onLike, showFullContent = false, showCo
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Lightbox */}
+      <Lightbox
+        isOpen={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        src={currentImage}
+        alt={`Post image by ${author.displayName || author.username || shortenAddress(post.authorAddress)}`}
+        hasNext={lightboxImages.length > 1}
+        hasPrevious={lightboxImages.length > 1}
+        onNext={handleNextImage}
+        onPrevious={handlePrevImage}
+      />
 
       {/* Comment form and comments */}
       {(showComments || showCommentForm) && (

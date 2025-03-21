@@ -120,11 +120,15 @@ export default function Sidebar() {
             ? 'font-semibold text-primary border-r-2 border-primary' 
             : 'text-muted-foreground'
         }`}>
-          <Bell className="mr-4 h-5 w-5" />
-          <div className="flex items-center justify-between flex-1">
-            <span>Notifications</span>
-            <NotificationBell showIcon={true} showLabel={false} iconSize="sm" side="right" />
-          </div>
+          
+            <NotificationBell showIcon={true} showLabel={false} iconSize="sm" side="right">
+              <div className="flex items-center justify-between flex-1">
+           
+              <Bell className="mr-4 h-5 w-5" />
+               <span>Notifications</span>
+               </div>
+            </NotificationBell>
+          
         </div>
       </nav>
 

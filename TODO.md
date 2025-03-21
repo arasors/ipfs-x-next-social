@@ -4,7 +4,7 @@ This document outlines the upcoming tasks and features for the IPFS-X project.
 
 ## High Priority
 
-- [ ] **User Authentication Improvements**
+- [x] **User Authentication Improvements**
   - [ ] Add email verification workflow
   - [ ] Implement password reset functionality
   - [ ] Add two-factor authentication option
@@ -63,6 +63,7 @@ This document outlines the upcoming tasks and features for the IPFS-X project.
   - [ ] Add loading states and skeletons
   - [ ] Implement infinite scroll for feed
   - [ ] Create user settings page
+  - [x] Add lightbox for media preview
 
 - [x] **Media Support**
   - [x] Add audio file support
@@ -80,10 +81,10 @@ This document outlines the upcoming tasks and features for the IPFS-X project.
 - [x] **User Profiles**
   - [x] Create detailed user profile pages
   - [x] Add follow/unfollow functionality
-  - [ ] Implement user activity feed
-  - [ ] Add profile customization options
-  - [ ] Create detailed profile pages
-  - [ ] Add customizable profile elements
+  - [x] Implement user activity feed
+  - [x] Add profile customization options
+  - [x] Create detailed profile pages
+  - [x] Add customizable profile elements
   - [ ] Implement activity history
   - [ ] Add profile privacy settings
   - [ ] Implement user badges/achievements

@@ -13,18 +13,26 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserIcon, Users, MessageSquare, Images } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { Lightbox } from "@/components/ui/lightbox";
 
 interface UserProfileProps {
   address: string;
 }
 
 export function UserProfile({ address }: UserProfileProps) {
-  const { getUserProfile, getFollowers, getFollowing } = useUserStore();
+  const { getUserProfile, getFollowers, getFollowing, followUser, unfollowUser } = useUserStore();
   const [profile, setProfile] = useState<UserProfileType | null>(null);
   const [followers, setFollowers] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("posts");
+  const router = useRouter();
+  
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [currentImage, setCurrentImage] = useState<string>("");
   
   // Initialize profile data
   useEffect(() => {
@@ -41,6 +49,28 @@ export function UserProfile({ address }: UserProfileProps) {
       setLoading(false);
     }
   }, [address, getUserProfile, getFollowers, getFollowing]);
+
+  const handleFollow = async () => {
+    if (profile?.isFollowing) {
+      await unfollowUser(address);
+    } else {
+      await followUser(address);
+    }
+  };
+  
+  const openProfileImageLightbox = () => {
+    if (profile?.profileImageCID) {
+      setCurrentImage(`https://ipfs.io/ipfs/${profile.profileImageCID}`);
+      setLightboxOpen(true);
+    }
+  };
+  
+  const openCoverImageLightbox = () => {
+    if (profile?.coverImageCID) {
+      setCurrentImage(`https://ipfs.io/ipfs/${profile.coverImageCID}`);
+      setLightboxOpen(true);
+    }
+  };
 
   if (loading) {
     return <UserProfileSkeleton />;
@@ -61,13 +91,15 @@ export function UserProfile({ address }: UserProfileProps) {
   return (
     <div className="space-y-4 w-full max-w-4xl mx-auto">
       {/* Cover Image */}
-      <div className="relative h-48 w-full rounded-lg overflow-hidden bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+      <div 
+        className="relative h-48 bg-gradient-to-r from-blue-500 to-indigo-600 overflow-hidden rounded-t-xl"
+        onClick={profile.coverImageCID ? openCoverImageLightbox : undefined}
+      >
         {profile.coverImageCID && (
-          <Image
-            src={`https://ipfs.io/ipfs/${profile.coverImageCID}`}
-            alt="Cover"
-            fill
-            className="object-cover"
+          <img 
+            src={`https://ipfs.io/ipfs/${profile.coverImageCID}`} 
+            alt="Cover" 
+            className={`w-full h-full object-cover ${profile.coverImageCID ? 'cursor-pointer' : ''}`}
           />
         )}
       </div>
@@ -78,7 +110,11 @@ export function UserProfile({ address }: UserProfileProps) {
           <div className="flex flex-col md:flex-row gap-4 md:items-end">
             {/* Avatar */}
             <div className="relative -mt-16 border-4 border-background rounded-full h-24 w-24 overflow-hidden bg-muted">
-              <Avatar className="h-full w-full">
+              <Avatar 
+                className="h-full w-full"
+                onClick={profile.profileImageCID ? openProfileImageLightbox : undefined}
+                style={profile.profileImageCID ? { cursor: 'pointer' } : undefined}
+              >
                 <AvatarImage 
                   src={profile.profileImageCID ? 
                     `https://ipfs.io/ipfs/${profile.profileImageCID}` : 
@@ -102,9 +138,16 @@ export function UserProfile({ address }: UserProfileProps) {
               </p>
             </div>
             
-            {/* Follow Button */}
+            {/* Follow Button or Edit Profile */}
             <div className="mt-2 md:mt-0">
-              <FollowButton targetAddress={profile.address} />
+              {profile.isCurrentUser ? (
+                <Button variant="outline" onClick={() => router.push('/profile/edit')} className="flex items-center gap-2">
+                  <UserIcon size={16} />
+                  Edit Profile
+                </Button>
+              ) : (
+                <FollowButton targetAddress={profile.address} />
+              )}
             </div>
           </div>
         </CardHeader>
@@ -172,6 +215,14 @@ export function UserProfile({ address }: UserProfileProps) {
           </Tabs>
         </CardContent>
       </Card>
+      
+      {/* Lightbox */}
+      <Lightbox
+        isOpen={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        src={currentImage}
+        alt={profile.displayName || profile.username || profile.address}
+      />
     </div>
   );
 }

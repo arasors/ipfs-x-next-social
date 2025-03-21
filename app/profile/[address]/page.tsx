@@ -1,16 +1,13 @@
+"use client";
 import { UserProfile } from "@/components/UserProfile";
 import { Card } from "@/components/ui/card";
 import { UserIcon } from "lucide-react";
+import { useParams } from "next/navigation";
 
-interface ProfilePageProps {
-  params: {
-    address: string;
-  };
-}
-
-export default function ProfilePage({ params }: ProfilePageProps) {
+export default function ProfilePage() {
+  const params = useParams();
   // Check if address is valid
-  if (!params.address || params.address.trim() === "") {
+  if (!params?.address || (params?.address as string)?.trim() === "") {
     return (
       <div className="container max-w-4xl mx-auto py-8 px-4">
         <Card className="p-8 flex flex-col items-center justify-center">
@@ -26,7 +23,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
   return (
     <div className="container max-w-4xl mx-auto py-8 px-4">
-      <UserProfile address={params.address} />
+      <UserProfile address={params.address as string} />
     </div>
   );
 } 

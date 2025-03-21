@@ -40,7 +40,7 @@ IPFS-X is a decentralized social media platform built on the InterPlanetary File
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/ipfs-x.git
+git clone https://github.com/arasors/ipfs-x-next-social.git
 cd ipfs-x
 ```
 
