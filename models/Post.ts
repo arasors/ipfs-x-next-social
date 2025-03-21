@@ -1,6 +1,9 @@
 import type { CID } from 'multiformats/cid';
 
-// Bir medya öğesini temsil eden arayüz
+// Define post visibility options
+export type PostVisibility = 'public' | 'followers' | 'private';
+
+// Interface representing a media item
 export interface MediaItem {
   contentCID?: string;
   type: 'image' | 'video' | 'document';
@@ -16,14 +19,18 @@ export interface Post {
   likes: number;
   comments: Comment[];
   reposts: number;
-  // Eski tekli medya desteği
+  // Legacy single media support
   mediaContentCID?: CID | string;
   mediaType?: 'image' | 'video' | 'audio';
-  // Yeni çoklu medya desteği
+  // New multiple media support
   mediaItems?: MediaItem[];
   tags?: string[];
-  // Kategori bilgisi
+  // Category information
   category?: string;
+  // Privacy controls
+  visibility: PostVisibility;
+  encryptionKey?: string; // For encrypted private content
+  allowedAddresses?: string[]; // Specific addresses that can view private content
 }
 
 export interface Comment {
@@ -35,32 +42,33 @@ export interface Comment {
   contentCID?: CID | string;
   likes: number;
   replies?: Comment[];
+  // Privacy-related fields
+  isPrivate?: boolean;
+  parentPostVisibility?: PostVisibility;
 }
 
+// Reference to the User model in models/User.ts
+// This interface was moved to User.ts
 export interface User {
   address: string;
-  username?: string;
-  displayName?: string;
-  bio?: string;
-  profileImageCID?: CID | string;
-  coverImageCID?: CID | string;
-  followers: number;
-  following: number;
-  posts: string[]; // Post ID'leri
 }
 
-// IPFS'e kaydedilecek post verisi
+// IPFS post data to be stored on IPFS
 export interface IPFSPost {
   content: string;
   authorAddress: string;
   authorName?: string;
   timestamp: number;
-  // Eski tekli medya desteği
+  // Legacy single media support
   mediaContentCID?: string;
   mediaType?: 'image' | 'video' | 'audio';
-  // Yeni çoklu medya desteği
+  // New multiple media support
   mediaItems?: MediaItem[];
   tags?: string[];
-  // Kategori bilgisi
+  // Category information
   category?: string;
+  // Privacy controls
+  visibility: PostVisibility;
+  encryptionKey?: string;
+  allowedAddresses?: string[];
 } 

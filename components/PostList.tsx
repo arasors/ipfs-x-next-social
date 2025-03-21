@@ -64,7 +64,7 @@ export default function PostList({ posts: initialPosts, isLoading = false }: Pos
     try {
       if (!post.contentCID) return post;
 
-      console.log(`${post.id} ID'li post için IPFS içeriği alınıyor, CID:`, post.contentCID);
+      console.log(`Fetching IPFS content for post ${post.id}, CID:`, post.contentCID);
 
       // IPFS modüllerini dinamik olarak import et
       const ipfsModule = await import('@/lib/ipfs');
@@ -76,18 +76,18 @@ export default function PostList({ posts: initialPosts, isLoading = false }: Pos
         try {
           cid = CIDClass.parse(post.contentCID);
         } catch (error) {
-          console.error('CID ayrıştırma hatası:', error);
+          console.error('CID parsing error:', error);
           return post;
         }
       } else {
         cid = post.contentCID;
       }
 
-      const content = await ipfsModule.getJsonContent(jsonHandler, cid);
-      console.log('IPFS içeriği alındı:', content);
+      const content = await ipfsModule.getJsonContent(cid.toString());
+      console.log('IPFS content retrieved:', content);
       return { ...post, ...content };
     } catch (error) {
-      console.error("Post içeriği alınırken hata:", error);
+      console.error("Error fetching post content:", error);
       return post;
     }
   };

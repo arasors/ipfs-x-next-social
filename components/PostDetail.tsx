@@ -77,6 +77,7 @@ export default function PostDetail({ postId }: PostDetailProps) {
             timestamp: postData.timestamp || Date.now(),
             likes: postData.likes || 0,
             comments: postData.comments || [],
+            visibility: postData.visibility || 'public',
             mediaItems: postData.media ? postData.media.map((cid: string) => ({
               contentCID: cid,
               type: 'unknown'
@@ -220,6 +221,7 @@ export default function PostDetail({ postId }: PostDetailProps) {
           {/* Post content */}
           <div className="prose prose-sm max-w-none dark:prose-invert mb-6">
             <p className="whitespace-pre-wrap">{post.content}</p>
+            <pre>{JSON.stringify(post.mediaItems, null, 2)}</pre>
           </div>
           
           {/* Media content */}

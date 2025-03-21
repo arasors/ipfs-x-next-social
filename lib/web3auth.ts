@@ -1,4 +1,4 @@
-// TypeScript tanımı için global window arayüzünü genişletme
+// Extending global window interface for TypeScript definitions
 declare global {
   interface Window {
     ethereum?: any;
@@ -8,7 +8,7 @@ declare global {
 import { ethers } from 'ethers';
 import { createWalletClient, custom } from 'viem';
 
-// Ethereum sağlayıcısını oluştur
+// Create Ethereum provider
 export async function createEthereumProvider() {
   if (typeof window === 'undefined') {
     return null;
@@ -16,69 +16,70 @@ export async function createEthereumProvider() {
   
   if (window.ethereum) {
     try {
-      // Metamask veya başka bir Web3 sağlayıcısı var
+      // MetaMask or another Web3 provider exists
       const provider = new ethers.BrowserProvider(window.ethereum);
       return provider;
     } catch (error) {
-      console.error('Ethereum sağlayıcısı oluşturulurken hata:', error);
+      console.error('Error creating Ethereum provider:', error);
       return null;
     }
   } else {
-    console.log('Web3 sağlayıcısı bulunamadı. Lütfen MetaMask veya başka bir cüzdan yükleyin.');
+    console.log('Web3 provider not found. Please install MetaMask or another wallet.');
     return null;
   }
 }
 
-// Cüzdan ile kimlik doğrulama
+// Authenticate with wallet
 export async function connectWallet() {
   try {
     const provider = await createEthereumProvider();
     if (!provider) {
-      throw new Error('Web3 sağlayıcısı bulunamadı');
+      throw new Error('Web3 provider not found');
     }
     
-    // Kullanıcıdan hesaplarına erişim izni iste
+    // Request permission to access user accounts
     await window.ethereum.request({ method: 'eth_requestAccounts' });
     
-    // Bağlı hesabı al
+    // Get connected account
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
     
-    return {
-      provider,
-      signer,
-      address
-    };
+    return address;
   } catch (error) {
-    console.error('Cüzdana bağlanırken hata:', error);
+    console.error('Error connecting to wallet:', error);
     throw error;
   }
 }
 
-// İmza ile kimlik doğrulama
+// Authenticate with signature
 export async function signMessage(message: string) {
   try {
-    const { signer } = await connectWallet();
+    const provider = await createEthereumProvider();
+    if (!provider) {
+      throw new Error('Web3 provider not found');
+    }
+    
+    const signer = await provider.getSigner();
     const signature = await signer.signMessage(message);
     return signature;
   } catch (error) {
-    console.error('Mesaj imzalanırken hata:', error);
+    console.error('Error signing message:', error);
     throw error;
   }
 }
 
-// Kullanıcının kimliğini doğrula
+// Verify user identity
 export async function verifySignature(message: string, signature: string, address: string): Promise<boolean> {
   try {
     const signerAddress = ethers.verifyMessage(message, signature);
     return signerAddress.toLowerCase() === address.toLowerCase();
   } catch (error) {
-    console.error('İmza doğrulanırken hata:', error);
+    console.error('Error verifying signature:', error);
     return false;
   }
 }
 
-// Viem ile cüzdan istemcisi oluştur (ConnectKit ve diğer kütüphaneler için)
+// Create wallet client with viem (for ConnectKit and other libraries)
 export function createViemWalletClient() {
   if (typeof window === 'undefined' || !window.ethereum) {
     return null;

@@ -5,17 +5,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { v4 as uuidv4 } from "uuid"; 
-// IPFS fonksiyonlarını doğrudan içe aktarmıyoruz
+// We don't import IPFS functions directly
 // import { createHeliaNode, addJsonContent } from "@/lib/ipfs";
 import { connectWallet } from "@/lib/web3auth";
-import { IPFSPost, Post, MediaItem } from "@/models/Post";
+import { IPFSPost, Post, MediaItem, PostVisibility } from "@/models/Post";
 import { toast } from "sonner";
 import { usePostStore } from "@/store/postStore";
+import { useUserStore } from "@/store/userStore";
 import { useDropzone } from 'react-dropzone';
-// react-file-icon için tip tanımı ekliyoruz
+// Add type definition for react-file-icon
 // @ts-ignore
 import {FileIcon, defaultStyles} from 'react-file-icon';
-import { Loader2, Share2, Copy, ExternalLink } from "lucide-react";
+import { Loader2, Share2, Copy, ExternalLink, Globe, Users, Lock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,8 +25,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { extractHashtags } from '@/lib/hashtags';
+import { useHashtagStore } from '@/store/hashtagStore';
+import { MediaPreview } from "@/lib/components/MediaPreview";
 
-// Dosya tipi ve önizleme bilgilerini tutan tip
+// Type for file type and preview information
 interface MediaFile {
   file: File;
   preview: string;
@@ -34,17 +45,21 @@ interface MediaFile {
   cid?: string;
 }
 
-// IPFS işlemi durumu
+// IPFS process status
 type ProcessStatus = 'idle' | 'uploading' | 'success' | 'error';
 
 export default function CreatePost() {
   const { addPost } = usePostStore();
+  const { currentUser } = useUserStore();
+  const { updateTrendingHashtags, addRecentHashtag } = useHashtagStore();
   const [content, setContent] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [visibility, setVisibility] = useState<PostVisibility>('public');
+  const [allowedAddresses, setAllowedAddresses] = useState<string>('');
   
-  // IPFS işlemleri için durum bilgileri
+  // IPFS process status information
   const [showDialog, setShowDialog] = useState(false);
   const [processStatus, setProcessStatus] = useState<ProcessStatus>('idle');
   const [processMessage, setProcessMessage] = useState("");
@@ -52,68 +67,84 @@ export default function CreatePost() {
   const [ipfsShareUrl, setIpfsShareUrl] = useState("");
   const [ipfsError, setIpfsError] = useState("");
 
-  // Dosya yükleme için react-dropzone konfigürasyonu
+  // File upload with react-dropzone configuration
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    // Yükleme durumunu başlat
+    // Start upload state
     setIsUploading(true);
     
-    const newMediaFiles = await Promise.all(acceptedFiles.map(async (file) => {
-      // Dosya tipini belirleme
-      let fileType: 'image' | 'video' | 'document' = 'document';
-      if (file.type.startsWith('image/')) {
-        fileType = 'image';
-      } else if (file.type.startsWith('video/')) {
-        fileType = 'video';
-      }
+    try {
+      // Dynamically import IPFS modules
+      const ipfsModule = await import('@/lib/ipfs');
+      const { addBytes } = ipfsModule;
       
-      // Önizleme oluşturma
-      let preview = '';
-      if (fileType === 'image' || fileType === 'video') {
-        preview = URL.createObjectURL(file);
-      }
-      
-      // Yeni dosya nesnesi oluştur
-      const mediaFile: MediaFile = {
-        file,
-        preview,
-        type: fileType,
-        uploaded: false
-      };
-      
-      try {
-        // IPFS modüllerini dinamik olarak import et
-        const ipfsModule = await import('@/lib/ipfs');
-        const { createHeliaNode } = ipfsModule;
-        const { helia, fs } = await createHeliaNode();
+      const newMediaFiles = await Promise.all(acceptedFiles.map(async (file) => {
+        // Determine file type
+        let fileType: 'image' | 'video' | 'document' = 'document';
+        if (file.type.startsWith('image/')) {
+          fileType = 'image';
+        } else if (file.type.startsWith('video/')) {
+          fileType = 'video';
+        }
         
-        if (fs) {
-          // Dosyayı binary olarak oku
+        // Create preview
+        let preview = '';
+        if (fileType === 'image' || fileType === 'video') {
+          preview = URL.createObjectURL(file);
+        }
+        
+        // Create new file object
+        const mediaFile: MediaFile = {
+          file,
+          preview,
+          type: fileType,
+          uploaded: false
+        };
+        
+        try {
+          // Convert file to bytes
           const arrayBuffer = await file.arrayBuffer();
           const fileBytes = new Uint8Array(arrayBuffer);
           
-          // IPFS'e yükle
-          const mediaCID = await fs.addBytes(fileBytes);
-          const mediaCIDString = mediaCID.toString();
-          console.log('Medya dosyası IPFS CID:', mediaCIDString);
+          // Upload to IPFS with progress tracking
+          const mediaCIDString = await addBytes(fileBytes, {
+            filename: file.name,
+            mimeType: file.type,
+            onProgress: (progress) => {
+              console.log(`Upload progress for ${file.name}: ${progress * 100}%`);
+            },
+            pin: true
+          });
           
-          // CID'yi dosya bilgisine ekle
-          mediaFile.cid = mediaCIDString;
-          mediaFile.uploaded = true;
+          if (mediaCIDString) {
+            console.log('Media file IPFS CID:', mediaCIDString);
+            
+            // Add CID to file info
+            mediaFile.cid = mediaCIDString;
+            mediaFile.uploaded = true;
+            
+            return mediaFile;
+          } else {
+            throw new Error('Failed to get CID from upload');
+          }
+        } catch (error) {
+          console.error('Error uploading media file:', error);
+          toast.error(`Error uploading ${file.name}`);
+          return mediaFile; // Return without CID
         }
-      } catch (error) {
-        console.error('Medya dosyası yüklenirken hata:', error);
-        toast.error(`${file.name} yüklenirken hata oluştu`);
-      }
+      }));
       
-      return mediaFile;
-    }));
-    
-    // Yeni dosyaları mevcut dosyalara ekle
-    setMediaFiles(prev => [...prev, ...newMediaFiles]);
-    setIsUploading(false);
+      // Add new files to existing files
+      setMediaFiles(prev => [...prev, ...newMediaFiles]);
+    } catch (error) {
+      console.error("Error in file upload process:", error);
+      toast.error("File upload error. Please try again.");
+    } finally {
+      // Always reset uploading state
+      setIsUploading(false);
+    }
   }, []);
   
-  // Dropzone konfigürasyonu
+  // Dropzone configuration
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
     onDrop,
     accept: {
@@ -126,11 +157,11 @@ export default function CreatePost() {
     maxFiles: 5
   });
 
-  // Dosya kaldırma işlevi
+  // File removal function
   const removeFile = (index: number) => {
     setMediaFiles(prev => {
       const newFiles = [...prev];
-      // Eğer önizleme URL'i varsa, kaynağı serbest bırak
+      // If there's a preview URL, release it
       if (newFiles[index].preview) {
         URL.revokeObjectURL(newFiles[index].preview);
       }
@@ -139,7 +170,7 @@ export default function CreatePost() {
     });
   };
 
-  // Component unmount olduğunda önizleme URL'lerini temizle
+  // Clean up preview URLs when component unmounts
   useEffect(() => {
     return () => {
       mediaFiles.forEach(file => {
@@ -150,23 +181,40 @@ export default function CreatePost() {
     };
   }, [mediaFiles]);
 
-  // IPFS bağlantısını panoya kopyala
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(ipfsShareUrl);
-    toast.success("IPFS link copied to clipboard");
+  // Format allowed addresses as array
+  const formatAllowedAddresses = (): string[] | undefined => {
+    if (visibility !== 'private' || !allowedAddresses.trim()) return undefined;
+    
+    return allowedAddresses
+      .split(',')
+      .map(address => address.trim())
+      .filter(address => address.length > 0);
   };
 
-  // İşlem sonrası dialog'u kapat ve durumu sıfırla
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(ipfsShareUrl);
+    toast.success("Link copied to clipboard");
+  };
+
   const closeDialog = () => {
-    setShowDialog(false);
-    // Form zaten temizlenmiş olacak, dialog'u kapatınca işlem durumunu sıfırla
-    setTimeout(() => {
+    if (processStatus === 'success' || processStatus === 'error') {
+      setShowDialog(false);
       setProcessStatus('idle');
-      setProcessMessage("");
-      setPostCID("");
-      setIpfsShareUrl("");
-      setIpfsError("");
-    }, 300);
+    }
+  };
+  
+  // Post visibility icon based on selection
+  const getVisibilityIcon = () => {
+    switch (visibility) {
+      case 'public':
+        return <Globe className="w-4 h-4 mr-2" />;
+      case 'followers':
+        return <Users className="w-4 h-4 mr-2" />;
+      case 'private':
+        return <Lock className="w-4 h-4 mr-2" />;
+      default:
+        return <Globe className="w-4 h-4 mr-2" />;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -175,67 +223,90 @@ export default function CreatePost() {
 
     try {
       setIsLoading(true);
-      // İşlem durum dialogunu göster
+      // Show process dialog
       setShowDialog(true);
       setProcessStatus('uploading');
-      setProcessMessage("Cüzdana bağlanılıyor...");
+      setProcessMessage("Connecting to wallet...");
 
-      // Cüzdana bağlan
-      const { address } = await connectWallet();
-      setProcessMessage("Medya dosyaları kontrol ediliyor...");
+      // Connect to wallet
+      const address = await connectWallet();
+      setProcessMessage("Checking media files...");
 
-      // Post verisini oluştur
+      // Check if all media files are properly uploaded
+      const allUploaded = mediaFiles.every(file => file.uploaded && file.cid);
+      if (mediaFiles.length > 0 && !allUploaded) {
+        setProcessMessage("Waiting for media files to finish uploading...");
+        // Give a short timeout for files to finish uploading
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Check again
+        const stillNotUploaded = mediaFiles.some(file => !file.uploaded || !file.cid);
+        if (stillNotUploaded) {
+          setProcessStatus('error');
+          setIpfsError("Some media files failed to upload. Please try again.");
+          return;
+        }
+      }
+
+      // Extract hashtags from content
+      const hashtags = extractHashtags(content);
+      
+      // Create post data
       const postData: IPFSPost = {
         content,
         authorAddress: address,
         timestamp: Date.now(),
+        visibility: visibility,
+        allowedAddresses: formatAllowedAddresses(),
+        tags: hashtags.length > 0 ? hashtags : undefined,
       };
 
-      // IPFS düğümünü dinamik olarak yükle ve içeriği ekle
+      // Load IPFS node dynamically and add content
       let contentCIDString = "";
 
       try {
-        // IPFS modüllerini dinamik olarak import et
+        // Dynamically import IPFS modules
         const ipfsModule = await import('@/lib/ipfs');
-        const { createHeliaNode, addJsonContent } = ipfsModule;
+        const { addJsonContent } = ipfsModule;
         
-        setProcessMessage("IPFS düğümüne bağlanılıyor...");
-        const { jsonHandler } = await createHeliaNode();
+        setProcessMessage("Preparing to upload post to IPFS...");
         
-        // Media bilgilerini ekle (birden fazla medya desteği için)
+        // Add media information (for multiple media support)
         if (mediaFiles.length > 0) {
-          setProcessMessage("Medya dosyaları IPFS'e kaydediliyor...");
-          // Yüklenen medyaların CID'lerini ve tiplerini bir dizide sakla
-          const mediaItems = mediaFiles.map(mediaFile => ({
-            contentCID: mediaFile.cid,
-            type: mediaFile.type
-          }));
+          setProcessMessage("Finalizing media files...");
+          // Store CIDs and types of uploaded media in an array
+          const mediaItems = mediaFiles
+            .filter(mediaFile => mediaFile.uploaded && mediaFile.cid)
+            .map(mediaFile => ({
+              contentCID: mediaFile.cid,
+              type: mediaFile.type
+            }));
           
-          // Post verilerine medya bilgilerini ekle
+          // Add media info to post data
           postData.mediaItems = mediaItems;
         }
         
-        // JSON verisini IPFS'e ekle
-        setProcessMessage("Post içeriği IPFS'e kaydediliyor...");
+        // Add JSON data to IPFS
+        setProcessMessage("Uploading post content to IPFS...");
         const cid = await addJsonContent(postData);
         contentCIDString = cid?.toString() || "";
         
-        // IPFS CID'sini sakla ve paylaşım URL'ini oluştur
+        // Store IPFS CID and create share URL
         setPostCID(contentCIDString);
         const shareUrl = `https://ipfs.io/ipfs/${contentCIDString}`;
         setIpfsShareUrl(shareUrl);
         
-        console.log("IPFS'e eklenen içeriğin CID'si:", contentCIDString);
-        setProcessMessage("Post başarıyla IPFS'e kaydedildi!");
+        console.log("CID of content added to IPFS:", contentCIDString);
+        setProcessMessage("Post successfully uploaded to IPFS!");
         setProcessStatus('success');
       } catch (error) {
-        console.error("IPFS'e yüklenirken hata:", error);
-        setIpfsError("IPFS'e yüklenirken bir hata oluştu. Post lokal olarak kaydedilecek.");
+        console.error("Error uploading to IPFS:", error);
+        setIpfsError("An error occurred while uploading to IPFS. The post will be saved locally only.");
         setProcessStatus('error');
-        // IPFS hatası olsa bile post oluşturmaya devam et
+        // Continue creating post even if IPFS error
       }
 
-      // Zustand store'a postu ekle (eski mediaContentCID yerine mediaItems kullan)
+      // Add post to Zustand store (use mediaItems instead of old mediaContentCID)
       addPost({
         content: postData.content,
         authorAddress: postData.authorAddress,
@@ -245,14 +316,29 @@ export default function CreatePost() {
         likes: 0,
         comments: [],
         reposts: 0,
+        visibility: postData.visibility,
+        allowedAddresses: postData.allowedAddresses,
+        tags: postData.tags,
       });
 
-      // Post oluşturuldu bildirimi
-      toast.success("Post başarıyla oluşturuldu!");
+      // Update hashtag store with any hashtags used in the post
+      if (hashtags.length > 0) {
+        // Add each hashtag to recent hashtags
+        hashtags.forEach(tag => addRecentHashtag(tag));
+        
+        // Update trending hashtags
+        updateTrendingHashtags();
+      }
 
-      // Formu temizle
+      // Toast notification for post creation
+      toast.success("Post successfully created!");
+
+      // Clear form
       setContent("");
-      // Önizleme URL'lerini temizle ve array'i sıfırla
+      setVisibility('public');
+      setAllowedAddresses('');
+      
+      // Clear preview URLs and reset array
       mediaFiles.forEach(file => {
         if (file.preview) {
           URL.revokeObjectURL(file.preview);
@@ -260,244 +346,238 @@ export default function CreatePost() {
       });
       setMediaFiles([]);
     } catch (error) {
-      console.error("Post oluşturulurken hata:", error);
-      toast.error("Post oluşturulurken bir hata oluştu");
+      console.error("Post creation error:", error);
+      toast.error("Post creation failed");
       setProcessStatus('error');
-      setIpfsError("Post oluşturulurken beklenmeyen bir hata oluştu.");
+      setIpfsError("Unexpected error occurred while creating post.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Dosya önizlemesi
-  const renderPreview = (file: MediaFile, index: number) => {
+  // Render preview of uploaded files
+  const renderPreview = () => {
+    if (mediaFiles.length === 0) return null;
+    
     return (
-      <div key={index} className="relative border rounded-md p-2 mb-2">
-        <div className="flex items-center">
-          {file.type === 'image' && (
-            <img 
-              src={file.preview} 
-              alt={`Preview ${index}`}
-              className="w-20 h-20 object-cover rounded-md mr-2" 
-            />
-          )}
-          
-          {file.type === 'video' && (
-            <video 
-              src={file.preview}
-              className="w-20 h-20 object-cover rounded-md mr-2"
-            />
-          )}
-          
-          {file.type === 'document' && (
-            <div className="w-16 h-16 mr-2">
-              <FileIcon 
-                extension={file.file.name.split('.').pop() || ''} 
-                {...(defaultStyles?.[file.file.name.split('.').pop() as keyof typeof defaultStyles]!)}
-              />
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {mediaFiles.map((file, index) => (
+          <div key={index} className="relative border rounded-md overflow-hidden bg-muted/30">
+            <div className="absolute top-2 right-2 z-10">
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                className="h-6 w-6 p-0 rounded-full"
+                onClick={() => removeFile(index)}
+              >
+                &times;
+              </Button>
             </div>
-          )}
-          
-          <div className="flex-1">
-            <p className="text-sm font-medium truncate">{file.file.name}</p>
-            <p className="text-xs text-gray-500">
-              {(file.file.size / 1024).toFixed(1)} KB
-              {file.uploaded ? ' (Yüklendi ✓)' : ' (Yükleniyor...)'}
-            </p>
+            
+            {file.type === 'image' || file.type === 'video' ? (
+              <div className="w-full h-32 relative">
+                <MediaPreview 
+                  dataUrl={file.preview}
+                  cid={file.cid}
+                  alt={file.file.name}
+                  width={300}
+                  height={128}
+                  mimeType={file.file.type}
+                  className="h-32"
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center p-4 h-32 justify-center">
+                <div className="w-10 h-10">
+                  <FileIcon 
+                    extension={file.file.name.split('.').pop() || ''} 
+                    {...defaultStyles[file.file.name.split('.').pop() as keyof typeof defaultStyles]} 
+                  />
+                </div>
+                <p className="mt-2 text-sm truncate max-w-full">{file.file.name}</p>
+              </div>
+            )}
+            
+            {!file.uploaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+                <div className="flex flex-col items-center">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <p className="text-xs mt-2">Uploading...</p>
+                </div>
+              </div>
+            )}
           </div>
-          
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => removeFile(index)}
-          >
-            <span className="sr-only">Remove</span>
-            ×
-          </Button>
-        </div>
+        ))}
       </div>
     );
   };
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="space-y-4 bg-card p-4 rounded-lg shadow">
-        <div>
-          <Label htmlFor="content">Your text</Label>
-          <Textarea
-            id="content"
-            placeholder="What are you thinking?"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={3}
-            className="resize-none"
-          />
-        </div>
-
-        {/* Dosya önizleme alanı */}
-        {mediaFiles.length > 0 && (
-          <div className="space-y-2">
-            <Label>Uploaded Media</Label>
-            <div className="max-h-60 overflow-y-auto">
-              {mediaFiles.map((file, index) => renderPreview(file, index))}
-            </div>
-          </div>
-        )}
-
-        {/* Dosya sürükleme ve bırakma alanı */}
+      <form onSubmit={handleSubmit} className="space-y-4 mb-6">
+        <Textarea
+          placeholder="What's on your mind?"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          className="min-h-[120px]"
+        />
+        
+        {/* File uploader section */}
         <div 
           {...getRootProps()} 
-          className={`border-2 border-dashed rounded-md p-4 text-center cursor-pointer transition-colors
-            ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}
+          className={`
+            border-2 border-dashed rounded-md p-4 cursor-pointer transition-colors
+            ${isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'}
+          `}
         >
           <input {...getInputProps()} />
+          
           {isUploading ? (
-            <p className="text-sm text-gray-500">Files are uploading...</p>
-          ) : isDragActive ? (
-            <p className="text-sm text-blue-500">Drop files here...</p>
+            <div className="flex flex-col items-center justify-center py-4">
+              <Loader2 className="h-8 w-8 animate-spin mb-2" />
+              <p>Uploading files...</p>
+            </div>
           ) : (
-            <div>
-              <p className="text-sm text-gray-500">
-                Click to add files or drag and drop
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Image, video and document (5 files max)
+            <div className="text-center py-4">
+              <p>{isDragActive ? "Drop files here" : "Drag and drop files here, or click to select"}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Supports images, videos, and documents (up to 5 files)
               </p>
             </div>
           )}
         </div>
-
-        <div className="flex justify-end">
-          <Button 
-            type="submit" 
-            disabled={isLoading || ((!content.trim()) && mediaFiles.length === 0) || isUploading}
-            className="flex items-center gap-2"
+        
+        {/* Preview section */}
+        {renderPreview()}
+        
+        {/* Post visibility selector */}
+        <div className="flex flex-col space-y-2">
+          <Label>Visibility</Label>
+          <Select 
+            value={visibility} 
+            onValueChange={(value: PostVisibility) => {
+              setVisibility(value);
+              // Clear allowed addresses if not private
+              if (value !== 'private') {
+                setAllowedAddresses('');
+              }
+            }}
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Sending...</span>
-              </>
-            ) : (
-              <>
-                <Share2 className="h-4 w-4" />
-                <span>Share</span>
-              </>
-            )}
-          </Button>
+            <SelectTrigger>
+              <SelectValue placeholder="Select visibility" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="public">
+                <div className="flex items-center">
+                  <Globe className="w-4 h-4 mr-2" />
+                  <span>Public</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="followers">
+                <div className="flex items-center">
+                  <Users className="w-4 h-4 mr-2" />
+                  <span>Followers only</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="private">
+                <div className="flex items-center">
+                  <Lock className="w-4 h-4 mr-2" />
+                  <span>Private (Specific addresses)</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* Allowed addresses input for private posts */}
+          {visibility === 'private' && (
+            <div className="space-y-2 mt-2">
+              <Label htmlFor="allowedAddresses">Allowed wallet addresses (comma separated)</Label>
+              <Input
+                id="allowedAddresses"
+                value={allowedAddresses}
+                onChange={(e) => setAllowedAddresses(e.target.value)}
+                placeholder="0x123..., 0xabc..."
+              />
+            </div>
+          )}
         </div>
+        
+        <Button 
+          type="submit" 
+          className="w-full" 
+          disabled={(!content.trim() && mediaFiles.length === 0) || isLoading || isUploading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Creating post...
+            </>
+          ) : (
+            <>Post</>
+          )}
+        </Button>
       </form>
-
-      {/* İşlem durum dialogu */}
+      
+      {/* IPFS process dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-[425px] max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {processStatus === 'uploading' && "Post Sending..."}
-              {processStatus === 'success' && "Post Successfully Sent!"}
-              {processStatus === 'error' && "Error during sending"}
+              {processStatus === 'uploading' && "Creating Post"}
+              {processStatus === 'success' && "Post Created Successfully"}
+              {processStatus === 'error' && "Post Creation Issue"}
             </DialogTitle>
             <DialogDescription>
-              {processStatus === 'uploading' && "Your post is being uploaded to the IPFS network, please wait."}
-              {processStatus === 'success' && "Your post has been successfully uploaded to the IPFS network and shared."}
-              {processStatus === 'error' && "An error occurred while uploading to the IPFS network. The post was only saved locally."}
+              {processStatus === 'uploading' && "Please wait while your post is being processed..."}
+              {processStatus === 'success' && "Your post has been successfully created and shared on IPFS."}
+              {processStatus === 'error' && ipfsError}
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            {/* Yükleme durumu */}
+          <div className="py-4">
             {processStatus === 'uploading' && (
               <div className="flex flex-col items-center justify-center gap-4">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                <p className="text-sm text-center">{processMessage}</p>
+                <Loader2 className="h-8 w-8 animate-spin" />
+                <p>{processMessage}</p>
               </div>
             )}
             
-            {/* Başarılı durum */}
             {processStatus === 'success' && (
               <div className="space-y-4">
-                <div className="rounded-md bg-green-50 p-4">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm font-medium text-green-800">
-                        {processMessage}
-                      </p>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Share2 className="h-5 w-5" />
+                  <p className="font-medium">Share your post on IPFS</p>
                 </div>
                 
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">IPFS Content Identifier (CID):</p>
-                  <div className="flex items-center space-x-2">
-                    <input className="bg-zinc-100 p-2 rounded text-xs flex-1 truncate dark:bg-gray-800" value={postCID} readOnly />
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => {
-                        navigator.clipboard.writeText(postCID);
-                          toast.success("CID copied to clipboard");
-                      }}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={ipfsShareUrl} 
+                    readOnly 
+                    className="flex-1"
+                  />
+                  <Button onClick={copyToClipboard} size="icon" variant="outline">
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
                 
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">IPFS Link:</p>
-                  <div className="flex items-center space-x-2">
-                    <input className="bg-zinc-100 p-2 rounded text-xs flex-1 truncate dark:bg-gray-800" value={ipfsShareUrl} readOnly />
-                    <Button size="sm" variant="outline" onClick={copyToClipboard}>
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* Hata durumu */}
-            {processStatus === 'error' && (
-              <div className="rounded-md bg-red-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-red-800">
-                      {ipfsError}
-                    </p>
-                  </div>
+                <div className="pt-2">
+                  <a 
+                    href={ipfsShareUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    <span>Open in browser</span>
+                  </a>
                 </div>
               </div>
             )}
           </div>
           
-          <DialogFooter className="sm:justify-between">
-            {processStatus === 'success' && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" asChild>
-                  <a href={ipfsShareUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">
-                    <ExternalLink className="h-4 w-4" />
-                    <span>View on IPFS</span>
-                  </a>
-                </Button>
-                <Button size="sm" onClick={copyToClipboard} className="flex items-center gap-1">
-                  <Copy className="h-4 w-4" />
-                  <span>Copy Link</span>
-                </Button>
-              </div>
-            )}
-            <Button variant="ghost" size="sm" onClick={closeDialog}>
-              Close
+          <DialogFooter>
+            <Button onClick={closeDialog}>
+              {processStatus === 'success' || processStatus === 'error' ? 'Close' : 'Cancel'}
             </Button>
           </DialogFooter>
         </DialogContent>

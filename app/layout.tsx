@@ -4,6 +4,7 @@ import "../globals.css";
 import { Toaster } from "sonner"
 import Navbar from "@/components/Navbar";
 import Sidebar from "@/components/Sidebar";
+import { BottomNav } from "@/components/BottomNav";
 import { Providers } from "./providers";
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,7 +20,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "IPFS-X",
-  description: "IPFS tabanlı merkeziyetsiz sosyal medya platformu",
+  description: "Decentralized social media platform based on IPFS",
 };
 
 export default function RootLayout({
@@ -28,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr">
+    <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
       >
@@ -39,22 +40,25 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Providers>
-            {/* Mobil menü */}
+            {/* Mobile menu */}
             <div className="md:hidden">
               <Navbar />
             </div>
             
             <div className="flex">
-              {/* Sol sidebar - sadece tablet ve masaüstünde görünür */}
+              {/* Left sidebar - only visible on tablet and desktop */}
               <div className="hidden md:block w-64 shrink-0">
                 <Sidebar />
               </div>
               
-              {/* Ana içerik alanı */}
+              {/* Main content area */}
               <div className="flex-1 min-h-screen pl-8">
                 {children}
               </div>
             </div>
+            
+            {/* Bottom navigation for mobile */}
+            <BottomNav />
             
             <Toaster />
           </Providers>

@@ -5,6 +5,7 @@ import { config } from "@/lib/web3config";
 import { WagmiProvider } from "wagmi";
 import { ConnectKitProvider } from "connectkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthGuard } from "@/components/AuthGuard";
 
 const queryClient = new QueryClient();
 
@@ -13,7 +14,9 @@ export function Providers({ children }: PropsWithChildren) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <ConnectKitProvider>
-          {children}
+          <AuthGuard>
+            {children}
+          </AuthGuard>
         </ConnectKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

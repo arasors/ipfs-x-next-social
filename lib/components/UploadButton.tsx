@@ -19,7 +19,7 @@ export function UploadButton({
   accept = "image/*,video/*,audio/*",
   variant = "secondary",
   size = "default",
-  label = "Dosya Yükle"
+  label = "Upload File"
 }: UploadButtonProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -58,7 +58,8 @@ export function UploadButton({
             const previousFilesContribution = uploadedSize / totalSize;
             
             setUploadProgress(Math.round((previousFilesContribution + fileContribution) * 100));
-          }
+          },
+          pin: true // Ensure pinning is attempted
         });
         
         if (cid) {
@@ -66,18 +67,23 @@ export function UploadButton({
           uploadedSize += file.size;
           setUploadProgress(Math.round((uploadedSize / totalSize) * 100));
         } else {
-          throw new Error(`"${file.name}" yüklenirken hata oluştu`);
+          throw new Error(`Error uploading "${file.name}"`);
         }
       }
 
       // Set progress to 100% when all files are uploaded
       setUploadProgress(100);
-      onUploadComplete(cids);
+      
+      // Add a small delay to ensure UI updates properly
+      setTimeout(() => {
+        setIsUploading(false);
+        onUploadComplete(cids);
+      }, 500);
     } catch (err) {
-      console.error("Dosya yükleme hatası:", err);
-      setError(err instanceof Error ? err.message : "Dosya yüklenirken hata oluştu");
-    } finally {
+      console.error("File upload error:", err);
+      setError(err instanceof Error ? err.message : "Error uploading file");
       setIsUploading(false);
+    } finally {
       // Reset the input value to allow uploading the same file again
       const input = document.getElementById("file-upload") as HTMLInputElement;
       if (input) input.value = "";
@@ -95,7 +101,7 @@ export function UploadButton({
           className="relative"
         >
           <UploadIcon className="mr-2 h-4 w-4" />
-          {label}
+          {isUploading ? "Uploading..." : label}
           <input
             id="file-upload"
             type="file"
@@ -107,7 +113,7 @@ export function UploadButton({
         </Button>
         {isUploading && (
           <span className="text-sm text-muted-foreground animate-pulse">
-            Yükleniyor... {uploadProgress}%
+            Uploading... {uploadProgress}%
           </span>
         )}
       </div>
