@@ -20,6 +20,7 @@ interface UserState {
   isFollowing: (targetAddress: string) => boolean;
   getFollowers: (address: string) => string[];
   getFollowing: (address: string) => string[];
+  fetchUsersByAddresses: (addresses: string[]) => Promise<void>;
   
   // Helper functions
   reset: () => void;
@@ -87,7 +88,19 @@ export const useUserStore = create<UserState>()(
       
       getUserProfile: (userId) => {
         const { users, currentUser } = get();
-        const user = users[userId] || get().getOrCreateUser(userId);
+        const user = users[userId];
+        
+        // If user doesn't exist, return a minimal profile
+        if (!user) {
+          return {
+            address: userId,
+            followingCount: 0,
+            followersCount: 0,
+            postCount: 0,
+            isCurrentUser: false,
+            isFollowing: false
+          };
+        }
         
         const profile: UserProfile = {
           address: user.address,
@@ -212,6 +225,37 @@ export const useUserStore = create<UserState>()(
         const user = get().users[address];
         if (!user) return [];
         return user.following;
+      },
+      
+      fetchUsersByAddresses: async (addresses: string[]) => {
+        set(state => ({ loading: true }));
+        
+        try {
+          // Filter out addresses that already exist in the store
+          const uniqueAddresses = addresses.filter(address => !get().users[address]);
+          
+          // In a real app, you would fetch users from API here
+          // For now, just create placeholder users for each address
+          const newUsers: Record<string, User> = {};
+          
+          uniqueAddresses.forEach(address => {
+            newUsers[address] = get().getOrCreateUser(address);
+          });
+          
+          // Update store with new users
+          set(state => ({ 
+            users: {
+              ...state.users,
+              ...newUsers
+            },
+            loading: false 
+          }));
+        } catch (error) {
+          console.error('Error fetching users:', error);
+          set(state => ({ loading: false }));
+        }
+        
+        return Promise.resolve();
       },
       
       reset: () => {

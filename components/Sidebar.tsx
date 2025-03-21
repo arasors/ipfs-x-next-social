@@ -122,7 +122,7 @@ export default function Sidebar() {
         }`}>
           
             <NotificationBell showIcon={true} showLabel={false} iconSize="sm" side="right">
-              <div className="flex items-center justify-between flex-1">
+              <div className="flex items-center  flex-1">
            
               <Bell className="mr-4 h-5 w-5" />
                <span>Notifications</span>

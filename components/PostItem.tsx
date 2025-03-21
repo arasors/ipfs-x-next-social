@@ -599,10 +599,7 @@ export default function PostItem({ post, onLike, showFullContent = false, showCo
         onClose={() => setLightboxOpen(false)}
         src={currentImage}
         alt={`Post image by ${author.displayName || author.username || shortenAddress(post.authorAddress)}`}
-        hasNext={lightboxImages.length > 1}
-        hasPrevious={lightboxImages.length > 1}
-        onNext={handleNextImage}
-        onPrevious={handlePrevImage}
+        
       />
 
       {/* Comment form and comments */}
