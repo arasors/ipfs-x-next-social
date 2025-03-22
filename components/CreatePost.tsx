@@ -297,8 +297,69 @@ export default function CreatePost() {
         setIpfsShareUrl(shareUrl);
         
         console.log("CID of content added to IPFS:", contentCIDString);
+        
+        // Add post to the posts index API if this is a public post
+        if (contentCIDString && visibility === 'public') {
+          try {
+            setProcessMessage("Adding post to global index...");
+            
+            const indexResponse = await fetch('/api/posts/index', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ cid: contentCIDString })
+            });
+            
+            if (indexResponse.ok) {
+              console.log("Post added to global index successfully");
+            } else {
+              console.warn("Failed to add post to global index", await indexResponse.text());
+            }
+          } catch (error) {
+            console.error("Error adding post to index:", error);
+            // Continue even if this fails
+          }
+        }
+        
+        // Add post to our local API
+        try {
+          setProcessMessage("Saving post to your feed...");
+          
+          // Convert to the format our API expects
+          const apiPost = {
+            id: contentCIDString || uuidv4(),
+            content: postData.content,
+            authorAddress: postData.authorAddress,
+            authorName: currentUser?.displayName || '',
+            timestamp: postData.timestamp,
+            contentCID: contentCIDString,
+            mediaItems: postData.mediaItems,
+            visibility: postData.visibility,
+            tags: postData.tags
+          };
+          
+          const apiResponse = await fetch('/api/posts', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(apiPost)
+          });
+          
+          if (apiResponse.ok) {
+            console.log("Post added to API successfully");
+          } else {
+            console.warn("Failed to add post to API", await apiResponse.text());
+          }
+        } catch (error) {
+          console.error("Error adding post to API:", error);
+          // Continue even if this fails
+        }
+        
         setProcessMessage("Post successfully uploaded to IPFS!");
         setProcessStatus('success');
+        
       } catch (error) {
         console.error("Error uploading to IPFS:", error);
         setIpfsError("An error occurred while uploading to IPFS. The post will be saved locally only.");

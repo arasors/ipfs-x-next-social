@@ -68,12 +68,12 @@ This document outlines the upcoming tasks and features for the IPFS-X project.
 - [x] **Media Support**
   - [x] Add audio file support
   - [x] Implement media preview optimization
-  - [ ] Add video player with adaptive streaming
+  - [x] Add video player with adaptive streaming
   - [ ] Implement image editing/filters
-  - [ ] Support document previews (PDF, etc.)
-  - [ ] Add video playback support
+  - [x] Support document previews (PDF, etc.)
+  - [x] Add video playback support
   - [ ] Implement image cropping tools
-  - [ ] Create GIF support
+  - [x] Create GIF support
   - [ ] Add support for attachments/documents
   - [ ] Implement media galleries in posts
   - [ ] Add image editing capabilities

@@ -6,19 +6,36 @@ import { useUserStore } from '@/store/userStore';
 import { MessageList } from '@/components/MessageList';
 import { ConversationView } from '@/components/ConversationView';
 import { NewMessageButton } from '@/components/NewMessageButton';
-import {AuthGuard} from '@/components/AuthGuard';
+import { AuthGuard } from '@/components/AuthGuard';
+import { syncMessages } from '@/lib/syncMessages';
+import { initMessageDB } from '@/lib/orbitdb-messages';
+import { Loader2 } from 'lucide-react';
 
 export default function MessagesPage() {
   const { chats, fetchChats, selectedChatId, selectChat } = useMessageStore();
   const [loading, setLoading] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   const fetchUserData = useUserStore((state) => state.fetchUsersByAddresses);
   
   useEffect(() => {
-    const loadChats = async () => {
+    const loadData = async () => {
       setLoading(true);
+      setIsSyncing(true);
+      
       try {
+        console.log('Mesajlar yükleniyor...');
+        
+        // OrbitDB'yi başlat
+        await initMessageDB();
+        
+        // Önce yerel verileri yükle (hızlı UI güncellemesi için)
         await fetchChats();
+        
+        // Sonra sunucu ve OrbitDB ile senkronize et
+        const newSyncTime = await syncMessages(lastSyncTime);
+        setLastSyncTime(newSyncTime);
         
         // Get unique participant addresses from all chats
         const participantAddresses = new Set<string>();
@@ -32,26 +49,45 @@ export default function MessagesPage() {
         if (participantAddresses.size > 0) {
           await fetchUserData(Array.from(participantAddresses));
         }
+        
+        console.log('Mesajlar başarıyla yüklendi');
       } catch (error) {
         console.error('Error loading chats:', error);
       } finally {
         setLoading(false);
+        setIsSyncing(false);
       }
     };
     
-    loadChats();
+    loadData();
     
     // Set up interval to refresh chats periodically
-    const intervalId = setInterval(() => {
-      fetchChats();
-    }, 5000); // Refresh every 5 seconds
+    const intervalId = setInterval(async () => {
+      try {
+        setIsSyncing(true);
+        // Sync with the server and OrbitDB periodically
+        const newSyncTime = await syncMessages(lastSyncTime);
+        setLastSyncTime(newSyncTime);
+      } catch (error) {
+        console.error('Error syncing messages:', error);
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 30000); // Sync every 30 seconds
     
     return () => clearInterval(intervalId);
-  }, [fetchChats, fetchUserData]);
+  }, [fetchChats, fetchUserData, lastSyncTime]);
   
   return (
     <AuthGuard>
-      <div className="container mx-auto p-4 h-[calc(100vh-80px)] overflow-hidden">
+      <div className="container mx-auto p-4 h-[calc(100vh-80px)] overflow-hidden relative">
+        {isSyncing && (
+          <div className="absolute top-1 right-1 z-10 flex items-center bg-background/80 text-xs text-muted-foreground rounded p-1">
+            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+            <span>Mesajlar senkronize ediliyor...</span>
+          </div>
+        )}
+        
         <div className="flex h-full gap-4">
           {/* Sidebar with message list */}
           <div className="w-full sm:w-1/3 lg:w-1/4 bg-background border rounded-lg overflow-hidden flex flex-col">
@@ -65,6 +101,7 @@ export default function MessagesPage() {
                 chats={Object.values(chats)} 
                 selectedChatId={selectedChatId} 
                 onSelectChat={selectChat} 
+                isLoading={loading}
               />
             </div>
           </div>

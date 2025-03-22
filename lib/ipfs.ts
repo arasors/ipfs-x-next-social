@@ -48,9 +48,9 @@ const CONFIG: IpfsConfig = {
         url: 'https://api.pinata.cloud/pinning/pinByHash',
         headers: {
           'Content-Type': 'application/json',
-          'pinata_api_key': 'f694d50e1e7f165a1715',
-          'pinata_secret_api_key': '635433cb2d4921d8b0d419e655838b10cd463e084876a1e5b9fc6ee921702646',
-          'pinata_jwt': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJhMWNjM2ZhMS1mYjRiLTRiOTctYWMzMi04ZjM0MTA4YzhlNGQiLCJlbWFpbCI6ImFyYXNpbnRoZWhlbGxAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6ImY2OTRkNTBlMWU3ZjE2NWExNzE1Iiwic2NvcGVkS2V5U2VjcmV0IjoiNjM1NDMzY2IyZDQ5MjFkOGIwZDQxOWU2NTU4MzhiMTBjZDQ2M2UwODQ4NzZhMWU1YjlmYzZlZTkyMTcwMjY0NiIsImV4cCI6MTc3NDA1MDM2Mn0.l_CudiC2WV3UwjDfts9nCQfDamOs3O08t1Y6zsaBHs4'
+          'pinata_api_key': process.env.NEXT_PUBLIC_PINATA_API_KEY || '',
+          'pinata_secret_api_key': process.env.NEXT_PUBLIC_PINATA_SECRET_API_KEY || '',
+          'pinata_jwt': process.env.NEXT_PUBLIC_PINATA_JWT || ''
         }
       }
       // Web3.Storage pinning API has been deprecated as of January 9, 2024
@@ -1112,3 +1112,228 @@ export const detectMimeType = (bytes: Uint8Array): string | null => {
   // Default to octet-stream for unknown binary formats
   return 'application/octet-stream';
 };
+
+// Add a new function to fetch posts from public gateways and IPFS
+export const fetchPostsFromRemote = async (): Promise<any[]> => {
+  try {
+    // Array of gateway URLs to try
+    const gateways = [
+      'https://ipfs.io/api/v0/dag/get?arg=',
+      'https://dweb.link/api/v0/dag/get?arg=',
+      'https://gateway.pinata.cloud/ipfs/'
+    ];
+    
+    // Try to fetch the global posts index from known CIDs
+    const knownIndexCIDs = [
+      // Add any known CIDs for post indices here that should be checked
+      // These would be CIDs of files containing arrays of post CIDs
+      'QmPostsIndexCID1', // Replace with actual CIDs
+      'QmPostsIndexCID2'  // Replace with actual CIDs
+    ];
+    
+    const fetchedPosts: any[] = [];
+    
+    // Try each gateway and index CID combination
+    for (const gateway of gateways) {
+      for (const cid of knownIndexCIDs) {
+        try {
+          const response = await fetch(`${gateway}${cid}`, {
+            signal: AbortSignal.timeout(5000) // 5-second timeout
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (Array.isArray(data.posts)) {
+              console.log(`Found post index at ${gateway}${cid}`);
+              
+              // For each post CID in the index, fetch the post content
+              for (const postCID of data.posts) {
+                try {
+                  const postData = await getContent(postCID);
+                  if (postData) {
+                    fetchedPosts.push({
+                      id: postCID,
+                      contentCID: postCID,
+                      ...JSON.parse(postData)
+                    });
+                  }
+                } catch (e) {
+                  console.warn(`Failed to fetch post with CID ${postCID}`);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch from ${gateway}${cid}`);
+          continue; // Try next gateway or CID
+        }
+      }
+    }
+    
+    // Also, try to discover recent posts from active feeds
+    // This would typically be a server API endpoint that returns recent posts
+    try {
+      const feedUrl = 'https://ipfs-x-feed.example.com/api/recent'; // Replace with actual API endpoint
+      const response = await fetch(feedUrl, {
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok) {
+        const feedData = await response.json();
+        if (Array.isArray(feedData.posts)) {
+          for (const post of feedData.posts) {
+            fetchedPosts.push(post);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch from feed API');
+    }
+    
+    return fetchedPosts;
+  } catch (error) {
+    console.error('Error fetching posts from remote sources:', error);
+    return [];
+  }
+};
+
+// Function to sync posts with our store 
+export const syncRemotePosts = async (): Promise<void> => {
+  try {
+    // Import the store dynamically to avoid circular dependencies
+    const { usePostStore } = await import('@/store/postStore');
+    const postStore = usePostStore.getState();
+    
+    // Step 1: Fetch remote posts from our feed API
+    const remotePosts = await fetchPostsFromRemote();
+    
+    if (remotePosts.length > 0) {
+      console.log(`Found ${remotePosts.length} posts from remote sources`);
+      
+      // Process each post and add to store if it doesn't exist
+      let count = 0;
+      for (const remotePost of remotePosts) {
+        // Convert to our Post format 
+        if (remotePost.id && !postStore.getPost(remotePost.id)) {
+          const post = {
+            id: remotePost.id,
+            content: remotePost.content || '',
+            authorAddress: remotePost.authorAddress || remotePost.author || '',
+            authorName: remotePost.authorName || '',
+            timestamp: remotePost.timestamp || Date.now(),
+            contentCID: remotePost.contentCID || remotePost.id,
+            likes: remotePost.likes || 0,
+            comments: remotePost.comments || [],
+            reposts: remotePost.reposts || 0,
+            mediaItems: remotePost.mediaItems || [],
+            visibility: remotePost.visibility || 'public'
+          };
+          
+          postStore.addPost(post);
+          count++;
+        }
+      }
+      
+      console.log(`Added ${count} new posts to store from API`);
+    }
+    
+    // Step 2: Try to fetch posts from IPFS gateways
+    const ipfsGateways = [
+      "https://ipfs.io/ipfs/",
+      "https://dweb.link/ipfs/",
+      "https://gateway.pinata.cloud/ipfs/"
+    ];
+    
+    // Try to fetch posts index from each gateway
+    const postsIndexCID = await getPostsIndexCID();
+    if (!postsIndexCID) {
+      console.log("No posts index CID found");
+      return;
+    }
+    
+    let postsIndex = null;
+    for (const gateway of ipfsGateways) {
+      try {
+        const response = await fetch(`${gateway}${postsIndexCID}`);
+        if (response.ok) {
+          postsIndex = await response.json();
+          break;
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch posts index from ${gateway}`, error);
+        continue;
+      }
+    }
+    
+    if (!postsIndex || !Array.isArray(postsIndex.posts)) {
+      console.log("No valid posts index found");
+      return;
+    }
+    
+    // Process each post CID
+    const fetchPromises = postsIndex.posts.map(async (postCID: string) => {
+      // Skip if we already have this post
+      if (postStore.getPost(postCID)) return;
+      
+      // Try to fetch the post from each gateway
+      for (const gateway of ipfsGateways) {
+        try {
+          const response = await fetch(`${gateway}${postCID}`);
+          if (response.ok) {
+            const postData = await response.json();
+            
+            // Convert to our Post format and add to store
+            const post = {
+              id: postData.id || postCID,
+              content: postData.content || '',
+              authorAddress: postData.authorAddress || postData.author || '',
+              authorName: postData.authorName || '',
+              timestamp: postData.timestamp || Date.now(),
+              contentCID: postData.contentCID || postCID,
+              likes: postData.likes || 0,
+              comments: postData.comments || [],
+              reposts: postData.reposts || 0,
+              mediaItems: postData.mediaItems || [],
+              visibility: postData.visibility || 'public'
+            };
+            
+            postStore.addPost(post);
+            return;
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+    });
+    
+    await Promise.allSettled(fetchPromises);
+    console.log(`Synced ${postsIndex.posts.length} posts from IPFS`);
+    
+  } catch (error) {
+    console.error('Error syncing remote posts:', error);
+  }
+};
+
+// Function to get the posts index CID
+async function getPostsIndexCID(): Promise<string | null> {
+  try {
+    // Try to get from local storage first
+    const storedCID = localStorage.getItem('postsIndexCID');
+    if (storedCID) return storedCID;
+    
+    // Try to get from our API
+    const response = await fetch('/api/posts/index');
+    if (response.ok) {
+      const data = await response.json();
+      if (data.cid) {
+        localStorage.setItem('postsIndexCID', data.cid);
+        return data.cid;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error getting posts index CID:", error);
+    return null;
+  }
+}

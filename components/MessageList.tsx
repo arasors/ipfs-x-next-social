@@ -13,9 +13,10 @@ interface MessageListProps {
   chats: Chat[];
   selectedChatId: string | null;
   onSelectChat: (chatId: string) => void;
+  isLoading?: boolean;
 }
 
-export function MessageList({ chats, selectedChatId, onSelectChat }: MessageListProps) {
+export function MessageList({ chats, selectedChatId, onSelectChat, isLoading = false }: MessageListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const getUserProfile = useUserStore(state => state.getUserProfile);
   const currentUserAddress = localStorage.getItem('walletAddress') || '';
@@ -119,6 +120,35 @@ export function MessageList({ chats, selectedChatId, onSelectChat }: MessageList
     if (!profile) return otherParticipant.substring(0, 8) + '...';
     return profile.displayName || profile.username || otherParticipant.substring(0, 8) + '...';
   };
+  
+  if (isLoading) {
+    return (
+      <div className="p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search messages..."
+            className="pl-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={isLoading}
+          />
+        </div>
+        
+        <div className="mt-4 space-y-3">
+          {Array(3).fill(0).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 p-3 rounded-md animate-pulse">
+              <div className="w-10 h-10 rounded-full bg-muted-foreground/20"></div>
+              <div className="flex-1">
+                <div className="h-4 bg-muted-foreground/20 rounded w-1/3 mb-2"></div>
+                <div className="h-3 bg-muted-foreground/10 rounded w-1/2"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   
   if (filteredChats.length === 0) {
     return (

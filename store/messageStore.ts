@@ -5,6 +5,7 @@ import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, Message } from '@/models/Message';
 import { useNotificationStore } from './notificationStore';
+import { saveChat, saveMessage } from '@/lib/orbitdb-messages';
 
 export interface MessageState {
   chats: Record<string, Chat>;
@@ -95,6 +96,11 @@ export const useMessageStore = create<MessageState>()(
             }
           }));
           
+          // Yeni sohbeti OrbitDB'ye kaydet
+          saveChat(newChat).catch(error => 
+            console.error('Error saving new self-chat to OrbitDB:', error)
+          );
+          
           return newChat;
         }
         
@@ -128,6 +134,11 @@ export const useMessageStore = create<MessageState>()(
             [newChatId]: []
           }
         }));
+        
+        // Yeni sohbeti OrbitDB'ye kaydet
+        saveChat(newChat).catch(error => 
+          console.error('Error saving new chat to OrbitDB:', error)
+        );
         
         return newChat;
       },
@@ -193,6 +204,16 @@ export const useMessageStore = create<MessageState>()(
           chats: updatedChats
         });
         
+        // Mesajı OrbitDB'ye kaydet
+        saveMessage(newMessage).catch(error => 
+          console.error('Error saving message to OrbitDB:', error)
+        );
+        
+        // Güncellenmiş sohbeti OrbitDB'ye kaydet
+        saveChat(updatedChats[chatId]).catch(error => 
+          console.error('Error saving updated chat to OrbitDB:', error)
+        );
+        
         // Use notification system to notify recipient
         const notificationStore = useNotificationStore.getState();
         notificationStore.addNotification({
@@ -238,6 +259,20 @@ export const useMessageStore = create<MessageState>()(
             [chatId]: updatedChat
           }
         }));
+        
+        // Okundu olarak işaretlenen mesajları OrbitDB'ye kaydet
+        updatedMessages.forEach(message => {
+          if (message.read) {
+            saveMessage(message).catch(error => 
+              console.error(`Error saving read status for message ${message.id} to OrbitDB:`, error)
+            );
+          }
+        });
+        
+        // Güncellenen sohbeti OrbitDB'ye kaydet
+        saveChat(updatedChat).catch(error => 
+          console.error(`Error saving updated chat ${chatId} to OrbitDB:`, error)
+        );
       },
       
       deleteMessage: (chatId: string, messageId: string) => {

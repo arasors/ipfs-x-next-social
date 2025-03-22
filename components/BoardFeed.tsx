@@ -14,29 +14,123 @@ import {
   Users,
   RefreshCw
 } from "lucide-react";
+import { syncRemotePosts } from "@/lib/ipfs";
 
 interface BoardFeedProps {
   title?: string;
   subtitle?: string;
   showCreatePost?: boolean;
+  mode?: string; // 'following', 'trending', 'recent', 'hashtags'
+  currentUserAddress?: string;
+  isFollowingHashtag?: (tag: string) => boolean;
+  getUserProfile?: (address: string) => any;
+  isLoading?: boolean;
+  isSyncing?: boolean;
 }
 
 export default function BoardFeed({ 
   title = "Board", 
   subtitle = "Discover all posts here",
-  showCreatePost = true
+  showCreatePost = true,
+  mode = "recent",
+  currentUserAddress = "",
+  isFollowingHashtag = () => false,
+  getUserProfile = () => null,
+  isLoading = false,
+  isSyncing = false
 }: BoardFeedProps) {
   const { posts, loading, getPosts } = usePostStore();
   const [activeFeed, setActiveFeed] = useState("herkes");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [apiPosts, setApiPosts] = useState<Post[]>([]);
+  const [isApiLoading, setIsApiLoading] = useState(false);
+  const [lastFetchTime, setLastFetchTime] = useState(0);
 
-  const refreshFeed = () => {
-    setIsRefreshing(true);
-    // Burada API'den yeni postları çekebilirsiniz
-    // Şimdilik sadece bir gecikme simülasyonu yapıyoruz
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1000);
+  // Fetch posts from API on initial load
+  useEffect(() => {
+    fetchPostsFromApi();
+    
+    // Also try to sync posts from IPFS
+    syncRemotePosts().catch(console.error);
+    
+    // Set up a refresh interval
+    const intervalId = setInterval(() => {
+      fetchPostsFromApi();
+    }, 5 * 60 * 1000); // Refresh every 5 minutes
+    
+    return () => clearInterval(intervalId);
+  }, []);
+  
+  // Fetch posts from our API endpoint
+  const fetchPostsFromApi = async () => {
+    try {
+      setIsApiLoading(true);
+      const currentTime = Date.now();
+      
+      // Only fetch posts newer than lastFetchTime
+      const url = `/api/posts?since=${lastFetchTime}&limit=50`;
+      const response = await fetch(url);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.posts && Array.isArray(data.posts)) {
+          // Update our API posts
+          setApiPosts(prev => {
+            // Filter out duplicates and merge with existing posts
+            const newPosts = data.posts.filter(
+              (apiPost: any) => !prev.some(existingPost => existingPost.id === apiPost.id)
+            );
+            return [...newPosts, ...prev];
+          });
+          
+          // Also update the post store
+          const { addPost, getPost } = usePostStore.getState();
+          data.posts.forEach((apiPost: any) => {
+            if (!getPost(apiPost.id)) {
+              // Convert to our Post format
+              const post = {
+                id: apiPost.id,
+                content: apiPost.content || '',
+                authorAddress: apiPost.authorAddress || apiPost.author || '',
+                authorName: apiPost.authorName || '',
+                timestamp: apiPost.timestamp || Date.now(),
+                contentCID: apiPost.contentCID || apiPost.id,
+                likes: apiPost.likes || 0,
+                comments: apiPost.comments || [],
+                reposts: apiPost.reposts || 0,
+                mediaItems: apiPost.mediaItems || [],
+                visibility: apiPost.visibility || 'public'
+              };
+              
+              addPost(post);
+            }
+          });
+          
+          setLastFetchTime(currentTime);
+        }
+      } else {
+        console.error('Failed to fetch posts from API:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error fetching posts from API:', error);
+    } finally {
+      setIsApiLoading(false);
+    }
+  };
+
+  // Refreshing data
+  const refreshFeed = async () => {
+    try {
+      setIsRefreshing(true);
+      await syncRemotePosts();
+      setActiveFeed("all");
+    } catch (error) {
+      console.error("Error refreshing feed:", error);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 500); // Minimum 500ms to avoid flashing
+    }
   };
 
   // Postları kategorilere ayırma
@@ -107,7 +201,7 @@ export default function BoardFeed({
         
         <TabsContent value="herkes" className="mt-4">
           <div className="space-y-4">
-            {loading ? (
+            {loading || isApiLoading ? (
               // Yükleniyor gösterimi
               Array(3).fill(0).map((_, i) => (
                 <div 

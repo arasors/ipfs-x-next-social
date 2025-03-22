@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useMessageStore } from '@/store/messageStore';
-import { useUserStore } from '@/store/userStore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -34,12 +34,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ChatBubble } from '@/components/ChatBubble';
+import { ChatInput } from '@/components/ChatInput';
+import { ContactCard } from '@/components/ContactCard';
+import { BackButton } from '@/components/BackButton';
+import { Loader2 } from 'lucide-react';
+import { syncMessages } from '@/lib/syncMessages';
+import { Message } from '@/models/Message';
 
-interface ConversationViewProps {
-  chatId: string;
-}
+type ConversationViewProps = {
+  chatId?: string;
+};
 
 export function ConversationView({ chatId }: ConversationViewProps) {
+  const router = useRouter();
+  const params = useParams();
   const [messageContent, setMessageContent] = useState('');
   const [mediaItems, setMediaItems] = useState<{ cid: string; mimeType: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,64 +61,84 @@ export function ConversationView({ chatId }: ConversationViewProps) {
   const [showEditHistory, setShowEditHistory] = useState<string | null>(null);
   const [confirmDeleteMessage, setConfirmDeleteMessage] = useState<string | null>(null);
   const [confirmDeleteChat, setConfirmDeleteChat] = useState(false);
+  const [isFetchingMessages, setIsFetchingMessages] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   const { 
-    getChat, 
-    getChatMessages, 
-    sendMessage, 
+    chats, 
+    messages, 
+    selectedChatId,
+    selectChat,
     markMessagesAsRead,
     deleteMessage,
     deleteChat,
     editMessage,
-    getMessageEditHistory 
+    sendMessage,
+    getMessageEditHistory
   } = useMessageStore();
   
-  const getUserProfile = useUserStore(state => state.getUserProfile);
+  // Kullanıcının bilgilerini localStorage'dan alıyoruz çünkü userStore'a tam erişimimiz yok
+  const userAddress = localStorage.getItem('walletAddress') || '';
+  const userDisplayName = localStorage.getItem('userDisplayName') || '';
+  const userAvatar = localStorage.getItem('userAvatar') || '';
   
-  const chat = getChat(chatId);
-  const messages = getChatMessages(chatId);
-  
-  // Get other participant's address (for display purposes)
-  const currentUserAddress = localStorage.getItem('walletAddress') || '';
-  const otherParticipantAddress = chat?.participants.find(p => p !== currentUserAddress) || currentUserAddress; // Default to current user if no other participant
-  
-  // Use state for profile to avoid triggering getOrCreateUser during render
-  const [otherParticipant, setOtherParticipant] = useState<any>(null);
-  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
-
-  // Fetch the profile in useEffect instead of during render
-  useEffect(() => {
-    // Fetch other participant's profile
-    if (otherParticipantAddress) {
-      const profile = getUserProfile(otherParticipantAddress);
-      setOtherParticipant(profile);
-    }
-
-    // Fetch current user's profile for self-messaging cases
-    if (currentUserAddress) {
-      const userProfile = getUserProfile(currentUserAddress);
-      setCurrentUserProfile(userProfile);
-    }
-  }, [otherParticipantAddress, currentUserAddress, getUserProfile]);
-  
-  // Mark messages as read when conversation is opened
-  useEffect(() => {
-    if (chatId) {
-      markMessagesAsRead(chatId);
-    }
-  }, [chatId, markMessagesAsRead]);
-  
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-  
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Geçici olarak kullanıcı bilgisi
+  const user = {
+    address: userAddress,
+    name: userDisplayName
   };
+  
+  // Geçici olarak kullanıcılar listesi
+  const usersByAddress: Record<string, { address: string, name?: string, avatar?: string }> = {};
+  
+  // Fallback to URL param if no chatId is provided as prop
+  const resolvedChatId = chatId || (params?.chatId as string);
+  
+  const chat = chats[resolvedChatId];
+  const chatMessages = messages[resolvedChatId] || [];
+  
+  // Determine the recipient address (the one that isn't the current user)
+  const recipientAddress = chat?.participants.find(
+    (address) => user && address !== user.address
+  ) || '';
+  
+  const recipient = usersByAddress[recipientAddress] || { address: recipientAddress };
+  
+  useEffect(() => {
+    if (resolvedChatId && resolvedChatId !== selectedChatId) {
+      selectChat(resolvedChatId);
+    }
+  }, [resolvedChatId, selectedChatId, selectChat]);
+  
+  useEffect(() => {
+    // Scroll to bottom when messages change
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    
+    // Mark messages as read when the chat is viewed
+    if (resolvedChatId && user) {
+      const unreadMessages = chatMessages.filter(
+        msg => !msg.read && msg.senderAddress !== user.address
+      );
+      
+      if (unreadMessages.length > 0) {
+        markMessagesAsRead(resolvedChatId);
+        
+        // Ensure messages are synced with OrbitDB after marking as read
+        syncMessages(Date.now() - 60000); // Sync recent messages
+      }
+    }
+  }, [resolvedChatId, chatMessages, user, markMessagesAsRead]);
+  
+  // Handle case where chat doesn't exist
+  if (!chat) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">Conversation not found</p>
+      </div>
+    );
+  }
   
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,7 +153,7 @@ export function ConversationView({ chatId }: ConversationViewProps) {
     
     try {
       await sendMessage({
-        chatId,
+        chatId: resolvedChatId,
         content: messageContent.trim(),
         mediaItems: mediaItems,
       });
@@ -181,16 +210,9 @@ export function ConversationView({ chatId }: ConversationViewProps) {
     setLightboxOpen(true);
   };
   
-  const getDisplayName = (address: string) => {
-    if (address === currentUserAddress) return 'You';
-    
-    const profile = getUserProfile(address);
-    return profile?.displayName || profile?.username || address.substring(0, 8) + '...';
-  };
-  
   // Group messages by date
-  const messagesByDate: { [date: string]: typeof messages } = {};
-  messages.forEach(message => {
+  const messagesByDate: { [date: string]: typeof chatMessages } = {};
+  chatMessages.forEach(message => {
     const date = new Date(message.timestamp).toDateString();
     if (!messagesByDate[date]) {
       messagesByDate[date] = [];
@@ -204,12 +226,10 @@ export function ConversationView({ chatId }: ConversationViewProps) {
                               chat.participants[0] === chat.participants[1]);
 
   // Use the appropriate profile based on whether this is a self conversation
-  const displayProfile = isSelfConversation ? currentUserProfile : otherParticipant;
-  
-  if (!chat) return <div className="p-4">Chat not found</div>;
+  const displayProfile = isSelfConversation ? user : recipient;
   
   // Gather all image media items for the lightbox
-  const allImageItems = messages
+  const allImageItems = chatMessages
     .flatMap(msg => msg.mediaItems || [])
     .filter(item => item.mimeType.startsWith('image/'))
     .map(item => ({ src: `https://ipfs.io/ipfs/${item.cid}`, alt: 'Media' }));
@@ -227,7 +247,7 @@ export function ConversationView({ chatId }: ConversationViewProps) {
   
   const handleSaveEdit = () => {
     if (editingMessageId && editContent.trim()) {
-      editMessage(chatId, editingMessageId, editContent);
+      editMessage(resolvedChatId, editingMessageId, editContent);
       setEditingMessageId(null);
       setEditContent('');
     }
@@ -236,7 +256,7 @@ export function ConversationView({ chatId }: ConversationViewProps) {
   // Handle message deletion
   const handleDeleteMessage = () => {
     if (confirmDeleteMessage) {
-      deleteMessage(chatId, confirmDeleteMessage);
+      deleteMessage(resolvedChatId, confirmDeleteMessage);
       setConfirmDeleteMessage(null);
     }
   };
@@ -244,255 +264,86 @@ export function ConversationView({ chatId }: ConversationViewProps) {
   // Handle chat deletion
   const handleDeleteChat = () => {
     if (confirmDeleteChat) {
-      deleteChat(chatId);
+      deleteChat(resolvedChatId);
       setConfirmDeleteChat(false);
     }
   };
   
   // Get message edit history
   const getHistoryForMessage = (messageId: string) => {
-    return getMessageEditHistory(chatId, messageId);
+    return getMessageEditHistory(resolvedChatId, messageId);
+  };
+  
+  const isOwnMessage = (message: Message) => {
+    return message.senderAddress === user.address;
   };
   
   return (
     <div className="flex flex-col h-full">
-      {/* Chat header with options */}
-      <div className="p-4 border-b flex items-center gap-3">
-        <Avatar>
-          <AvatarImage 
-            src={displayProfile?.profileImageCID ? 
-              `https://ipfs.io/ipfs/${displayProfile.profileImageCID}` : 
-              undefined
-            } 
-          />
-          <AvatarFallback>
-            {displayProfile?.displayName?.[0] || 
-              displayProfile?.username?.[0] || 
-              otherParticipantAddress[0]}
-          </AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <h3 className="font-medium">
-            {displayProfile?.displayName || 
-              displayProfile?.username || 
-              otherParticipantAddress.substring(0, 8) + '...'}
-          </h3>
-          {displayProfile?.username && (
-            <p className="text-sm text-muted-foreground">
-              @{displayProfile.username}
-            </p>
-          )}
+      {/* Header */}
+      <div className="p-3 border-b flex items-center">
+        <div className="sm:hidden mr-2">
+          <BackButton onClick={() => router.push('/messages')} />
         </div>
         
-        {/* Add chat options menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreVertical className="h-5 w-5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem 
-              className="text-destructive focus:text-destructive"
-              onClick={() => setConfirmDeleteChat(true)}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete conversation
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {recipient ? (
+          <ContactCard 
+            user={recipient} 
+            compact
+            showStatus
+          />
+        ) : (
+          <div className="flex items-center space-x-2">
+            <div className="bg-muted w-10 h-10 rounded-full"></div>
+            <div>
+              <p className="font-medium">
+                {recipientAddress ? `${recipientAddress.slice(0, 6)}...${recipientAddress.slice(-4)}` : 'Unknown'}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
       
-      {/* Delete chat confirmation dialog */}
-      <Dialog open={confirmDeleteChat} onOpenChange={setConfirmDeleteChat}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Conversation</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this entire conversation? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDeleteChat(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDeleteChat}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Messages area with edit support */}
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {Object.entries(messagesByDate).map(([date, dateMessages]) => (
-          <div key={date} className="space-y-4">
-            <div className="flex justify-center">
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                {date === new Date().toDateString() ? 'Today' : date}
-              </span>
-            </div>
-            
-            {dateMessages.map((message) => {
-              const isCurrentUser = message.senderAddress === currentUserAddress;
-              const messageClasses = isCurrentUser 
-                ? "ml-auto bg-primary text-primary-foreground" 
-                : "mr-auto bg-muted";
-              
-              // Show edit interface if this message is being edited
-              if (isCurrentUser && editingMessageId === message.id) {
-                return (
-                  <div 
-                    key={message.id} 
-                    className="ml-auto max-w-[80%]"
-                  >
-                    <div className="bg-primary text-primary-foreground rounded-lg p-3">
-                      <Textarea
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        className="min-h-[60px] bg-background text-foreground border rounded mb-2"
-                        placeholder="Edit your message..."
-                        autoFocus
-                      />
-                      <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={handleCancelEdit}
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          onClick={handleSaveEdit}
-                          disabled={!editContent.trim()}
-                        >
-                          <CheckCircle className="mr-2 h-4 w-4" />
-                          Save
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-              
-              return (
-                <div 
-                  key={message.id} 
-                  className={`max-w-[80%] flex flex-col ${isCurrentUser ? 'items-end' : 'items-start'}`}
-                >
-                  <div className={`rounded-lg p-3 ${messageClasses} relative group`}>
-                    <div className="break-words whitespace-pre-wrap">
-                      {message.content}
-                      {message.isEdited && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="text-xs ml-1 opacity-70">(edited)</span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">This message was edited</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      )}
-                    </div>
-                    
-                    {message.mediaItems && message.mediaItems.length > 0 && (
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        {message.mediaItems.map((media, idx) => {
-                          const imageIndex = allImageItems.findIndex(
-                            img => img.src === `https://ipfs.io/ipfs/${media.cid}`
-                          );
-                          
-                          if (media.mimeType.startsWith('image/')) {
-                            return (
-                              <div 
-                                key={media.cid}
-                                className="relative cursor-pointer"
-                                onClick={() => imageIndex >= 0 && openLightbox(imageIndex)}
-                              >
-                                <img 
-                                  src={`https://ipfs.io/ipfs/${media.cid}`}
-                                  alt="Media"
-                                  className="w-full h-auto rounded-md object-cover max-h-48"
-                                />
-                              </div>
-                            );
-                          } else {
-                            return (
-                              <div 
-                                key={media.cid}
-                                className="flex items-center justify-center p-4 border rounded-md bg-background text-center"
-                              >
-                                <a 
-                                  href={`https://ipfs.io/ipfs/${media.cid}`} 
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-500 hover:underline flex items-center gap-2"
-                                >
-                                  <ImageIcon size={16} />
-                                  <span>View Attachment</span>
-                                </a>
-                              </div>
-                            );
-                          }
-                        })}
-                      </div>
-                    )}
-                    
-                    {/* Message actions for the current user's messages */}
-                    {isCurrentUser && (
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
-                              <MoreVertical className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleStartEdit(message.id, message.content)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit message
-                            </DropdownMenuItem>
-                            {message.isEdited && (
-                              <DropdownMenuItem onClick={() => setShowEditHistory(message.id)}>
-                                <History className="mr-2 h-4 w-4" />
-                                View edit history
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setConfirmDeleteMessage(message.id)}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete message
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div 
-                    className={`text-xs text-muted-foreground mt-1 flex items-center gap-1 ${
-                      isCurrentUser ? 'text-right' : 'text-left'
-                    }`}
-                  >
-                    {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
-                    {isCurrentUser && message.read && (
-                      <span className="text-xs">• Read</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+        {isFetchingMessages ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
-        ))}
+        ) : chatMessages.length === 0 ? (
+          <div className="flex justify-center py-10">
+            <p className="text-muted-foreground">No messages yet</p>
+          </div>
+        ) : (
+          <>
+            {Object.entries(messagesByDate).map(([date, dateMessages]) => (
+              <div key={date} className="space-y-4">
+                <div className="flex justify-center">
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                    {date === new Date().toDateString() ? 'Today' : date}
+                  </span>
+                </div>
+                
+                {dateMessages.map((message) => (
+                  <ChatBubble
+                    key={message.id}
+                    message={message}
+                    isOwn={isOwnMessage(message)}
+                    sender={usersByAddress[message.senderAddress]}
+                  />
+                ))}
+              </div>
+            ))}
+          </>
+        )}
         <div ref={messagesEndRef} />
       </div>
+      
+      {/* Input */}
+      <ChatInput
+        chatId={resolvedChatId}
+        recipientAddress={recipientAddress}
+      />
       
       {/* Edit history dialog */}
       <Dialog open={showEditHistory !== null} onOpenChange={(open) => !open && setShowEditHistory(null)}>
@@ -532,6 +383,26 @@ export function ConversationView({ chatId }: ConversationViewProps) {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleDeleteMessage}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete chat confirmation dialog */}
+      <Dialog open={confirmDeleteChat} onOpenChange={setConfirmDeleteChat}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Conversation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this entire conversation? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteChat(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteChat}>
               Delete
             </Button>
           </DialogFooter>

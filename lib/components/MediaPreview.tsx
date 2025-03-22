@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { getContent, getBinaryContentFromGateways } from '@/lib/ipfs';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Play, Pause, Volume2, VolumeX, Maximize, SkipForward, SkipBack } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 
 interface MediaPreviewProps {
   cid?: string;
@@ -346,25 +347,15 @@ export function MediaPreview({
     
     case 'video':
       return (
-        <div className={`relative ${className}`} style={{ width, height }}>
-          <video 
-            src={src} 
-            controls 
-            className="w-full h-full rounded-md" 
-            onError={() => {
-              if (src && (src.startsWith('/api/ipfs/preview') || src.startsWith('/api/ipfs/pinata') || src.startsWith('/api/ipfs/direct/'))) {
-                //setUseApiEndpoint(false);
-                setFallbackGateway(true);
-                setSrc(`https://ipfs.io/ipfs/${cid}`);
-              }
-            }}
-          />
-          {(fallbackGateway || useApiEndpoint) && (
-            <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-1 py-0.5 rounded">
-              {useApiEndpoint ? 'API' : 'Gateway'}
-            </div>
-          )}
-        </div>
+        <VideoPlayer 
+          src={src} 
+          width={width} 
+          height={height} 
+          className={className}
+          cid={cid}
+          fallbackGateway={fallbackGateway}
+          useApiEndpoint={useApiEndpoint}
+        />
       );
     
     case 'audio':
@@ -418,4 +409,275 @@ export function MediaPreview({
         </div>
       );
   }
+}
+
+function VideoPlayer({ 
+  src, 
+  width, 
+  height, 
+  className,
+  cid,
+  fallbackGateway,
+  useApiEndpoint
+}: { 
+  src: string; 
+  width: number; 
+  height: number; 
+  className: string;
+  cid?: string;
+  fallbackGateway: boolean;
+  useApiEndpoint: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showControls, setShowControls] = useState(false);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration);
+      setLoading(false);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime);
+    };
+
+    const handleError = () => {
+      setError('Failed to load video');
+      if (src && (src.startsWith('/api/ipfs/preview') || 
+                 src.startsWith('/api/ipfs/pinata') || 
+                 src.startsWith('/api/ipfs/direct/'))) {
+        if (cid) {
+          setFallbackError(true);
+        }
+      }
+    };
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('error', handleError);
+
+    return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('error', handleError);
+    };
+  }, [src, cid]);
+
+  const handlePlayPause = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (playing) {
+      video.pause();
+    } else {
+      video.play();
+    }
+
+    setPlaying(!playing);
+  };
+
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setVolume(newVolume);
+    
+    if (videoRef.current) {
+      videoRef.current.volume = newVolume;
+      setMuted(newVolume === 0);
+    }
+  };
+
+  const toggleMute = () => {
+    const newMutedState = !muted;
+    setMuted(newMutedState);
+    
+    if (videoRef.current) {
+      videoRef.current.muted = newMutedState;
+    }
+  };
+
+  const handleSeek = (value: number[]) => {
+    const newTime = value[0];
+    setCurrentTime(newTime);
+    
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime;
+    }
+  };
+
+  const handleFullscreen = () => {
+    if (videoRef.current) {
+      videoRef.current.requestFullscreen();
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+  };
+
+  const skip = (amount: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime += amount;
+    }
+  };
+
+  const handleShowControls = () => {
+    setShowControls(true);
+    
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+  };
+
+  const [fallbackError, setFallbackError] = useState(false);
+
+  if (fallbackError) {
+    return (
+      <div className={`relative ${className}`} style={{ width, height }}>
+        <video 
+          src={`https://ipfs.io/ipfs/${cid}`}
+          controls 
+          className="w-full h-full rounded-md" 
+        />
+        <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-1 py-0.5 rounded">
+          Gateway fallback
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className={`flex items-center justify-center bg-muted ${className}`} style={{ width, height }}>
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={`flex items-center justify-center bg-muted ${className}`} style={{ width, height }}>
+        <p className="text-sm text-muted-foreground">
+          {error}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className={`relative ${className} group`} 
+      style={{ width, height }}
+      onMouseEnter={handleShowControls}
+      onMouseMove={handleShowControls}
+      onMouseLeave={() => setShowControls(false)}
+    >
+      <video 
+        ref={videoRef}
+        src={src} 
+        className="w-full h-full rounded-md" 
+        onClick={handlePlayPause}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+      />
+      
+      {/* Custom video controls */}
+      <div 
+        className={`absolute bottom-0 left-0 right-0 bg-black/60 px-4 py-2 rounded-b-md transition-opacity ${
+          showControls ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <Slider 
+            value={[currentTime]} 
+            max={duration} 
+            step={0.1} 
+            onValueChange={handleSeek}
+            className="flex-grow"
+          />
+          <span className="text-white text-xs ml-2">
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => skip(-10)} 
+              className="text-white hover:text-primary focus:outline-none"
+              aria-label="Skip back 10 seconds"
+            >
+              <SkipBack className="h-4 w-4" />
+            </button>
+            
+            <button 
+              onClick={handlePlayPause} 
+              className="text-white hover:text-primary focus:outline-none"
+              aria-label={playing ? 'Pause' : 'Play'}
+            >
+              {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            </button>
+            
+            <button 
+              onClick={() => skip(10)} 
+              className="text-white hover:text-primary focus:outline-none"
+              aria-label="Skip forward 10 seconds"
+            >
+              <SkipForward className="h-4 w-4" />
+            </button>
+            
+            <div className="flex items-center gap-2 ml-2">
+              <button 
+                onClick={toggleMute} 
+                className="text-white hover:text-primary focus:outline-none"
+                aria-label={muted ? 'Unmute' : 'Mute'}
+              >
+                {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+              
+              <Slider 
+                value={[volume]} 
+                max={1} 
+                step={0.1} 
+                onValueChange={handleVolumeChange} 
+                className="w-20"
+              />
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleFullscreen} 
+              className="text-white hover:text-primary focus:outline-none"
+              aria-label="Fullscreen"
+            >
+              <Maximize className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      {(fallbackGateway || useApiEndpoint) && (
+        <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-1 py-0.5 rounded">
+          {useApiEndpoint ? 'API' : 'Gateway'}
+        </div>
+      )}
+    </div>
+  );
 } 

@@ -12,12 +12,14 @@ interface AuthGuardProps {
   children: ReactNode;
   redirectTo?: string;
   requireAuth?: boolean;
+  allowUnauthenticated?: boolean;
 }
 
 export function AuthGuard({ 
   children, 
   redirectTo = "/", 
-  requireAuth = true 
+  requireAuth = true,
+  allowUnauthenticated = false
 }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -116,7 +118,7 @@ export function AuthGuard({
   }
 
   // If auth is required and user is not authenticated, show login screen
-  if (requireAuth && !currentUser && isProtectedRoute(pathname as string)) {
+  if (requireAuth && !currentUser && isProtectedRoute(pathname as string) && !allowUnauthenticated) {
     return (
       <div className="flex justify-center items-center min-h-[70vh] px-4">
         <Card className="w-full max-w-md shadow-lg">

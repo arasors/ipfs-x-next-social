@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface LightboxProps {
@@ -14,7 +14,7 @@ interface LightboxProps {
 export function Lightbox({ isOpen, onClose, src, alt }: LightboxProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl p-0 bg-background/5 backdrop-blur-sm border-none">
+      <DialogContent className="w-screen-lg p-0 bg-background/5 backdrop-blur-sm border-none">
         <div className="relative w-full h-full flex items-center justify-center p-2 sm:p-8">
           
           <div className="w-full h-full flex items-center justify-center">
@@ -95,7 +95,8 @@ export function LightboxModal({
   
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl p-0 bg-background/5 backdrop-blur-md border-none">
+      <DialogContent className="w-screen-lg p-0 bg-background/5 backdrop-blur-md border-none">
+      <DialogTitle className='sr-only'>Lightbox</DialogTitle>
         <div className="relative w-full h-full flex items-center justify-center">
           
           {images.length > 1 && (

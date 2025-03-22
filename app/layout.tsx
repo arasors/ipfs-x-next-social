@@ -52,7 +52,7 @@ export default function RootLayout({
               </div>
               
               {/* Main content area */}
-              <div className="flex-1 min-h-screen pl-8">
+              <div className="flex-1 min-h-screen md:pl-8">
                 {children}
               </div>
             </div>
