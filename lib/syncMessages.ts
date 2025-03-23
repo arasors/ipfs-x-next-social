@@ -1,20 +1,19 @@
 import { MessageState } from '@/store/messageStore';
-import { syncMessagesWithOrbitDB, initMessageDB } from './orbitdb-messages';
 
-// Arka arkaya istekler göndermemek için son senkronizasyon zamanını tutuyoruz
+// Track the last sync time to prevent frequent requests
 let lastSyncTimeGlobal = 0;
-const MIN_SYNC_INTERVAL = 5000; // 5 saniye
+const MIN_SYNC_INTERVAL = 5000; // 5 seconds
 
 /**
- * Mesajları hem API hem de OrbitDB ile senkronize eder
- * @param lastSyncTime Son senkronizasyonun zaman damgası
- * @returns Güncel senkronizasyonun zaman damgası
+ * Syncs messages with the API server
+ * @param lastSyncTime Last sync timestamp
+ * @returns Current sync timestamp
  */
 export const syncMessages = async (lastSyncTime: number = 0): Promise<number> => {
   try {
     const now = Date.now();
     
-    // Eğer son senkronizasyondan bu yana çok az zaman geçtiyse, senkronizasyonu atla
+    // Skip sync if too soon since last sync
     if (now - lastSyncTimeGlobal < MIN_SYNC_INTERVAL) {
       console.log('Skipping message sync - too soon since last sync');
       return lastSyncTime;
@@ -35,16 +34,12 @@ export const syncMessages = async (lastSyncTime: number = 0): Promise<number> =>
     // Get current state from the store
     const messageStore = useMessageStore.getState();
     
-    // Adım 1: OrbitDB ile senkronizasyon yap
-    console.log('Synchronizing messages with OrbitDB...');
-    await initMessageDB(); // OrbitDB'yi başlat
-    await syncMessagesWithOrbitDB(); // OrbitDB ile senkronize et
+    console.log('Synchronizing messages with API server...');
     
-    // Adım 2: API ile mesajları senkronize et (eski yöntem - geçiş döneminde)
-    // API sunucusuna yerel değişiklikleri gönder
+    // Push local changes to the server
     await pushMessagesToServer(messageStore, currentUserAddress);
     
-    // API sunucusundan güncellemeleri al
+    // Pull updates from the server
     const currentSyncTime = await pullMessagesFromServer(messageStore, currentUserAddress, lastSyncTime);
     
     return currentSyncTime;

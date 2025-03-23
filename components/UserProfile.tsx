@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getContent } from "@/lib/ipfs";
 import { useUserStore } from "@/store/userStore";
+import { useMessageStore } from "@/store/messageStore";
 import { FollowButton } from "./FollowButton";
 import { UserList } from "./UserList";
 import { UserProfile as UserProfileType } from "@/models/User";
@@ -12,7 +13,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserIcon, Users, MessageSquare, Images } from "lucide-react";
+import { UserIcon, Users, MessageSquare, Images, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { Lightbox } from "@/components/ui/lightbox";
@@ -23,6 +24,7 @@ interface UserProfileProps {
 
 export function UserProfile({ address }: UserProfileProps) {
   const { getUserProfile, getFollowers, getFollowing, followUser, unfollowUser } = useUserStore();
+  const { getOrCreateChat, selectChat } = useMessageStore();
   const [profile, setProfile] = useState<UserProfileType | null>(null);
   const [followers, setFollowers] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
@@ -69,6 +71,19 @@ export function UserProfile({ address }: UserProfileProps) {
     if (profile?.coverImageCID) {
       setCurrentImage(`https://ipfs.io/ipfs/${profile.coverImageCID}`);
       setLightboxOpen(true);
+    }
+  };
+
+  const handleMessageUser = () => {
+    try {
+      // Create or get an existing chat with this user
+      const chat = getOrCreateChat(address);
+      // Select that chat
+      selectChat(chat.id);
+      // Navigate to the messages page
+      router.push(`/messages/${chat.id}`);
+    } catch (error) {
+      console.error("Error creating chat:", error);
     }
   };
 
@@ -139,14 +154,24 @@ export function UserProfile({ address }: UserProfileProps) {
             </div>
             
             {/* Follow Button or Edit Profile */}
-            <div className="mt-2 md:mt-0">
+            <div className="mt-2 md:mt-0 flex gap-2">
               {profile.isCurrentUser ? (
                 <Button variant="outline" onClick={() => router.push('/profile/edit')} className="flex items-center gap-2">
                   <UserIcon size={16} />
                   Edit Profile
                 </Button>
               ) : (
-                <FollowButton targetAddress={profile.address} />
+                <>
+                  <FollowButton targetAddress={profile.address} />
+                  <Button 
+                    variant="secondary" 
+                    onClick={handleMessageUser}
+                    className="flex items-center gap-2"
+                  >
+                    <Send size={16} />
+                    Message
+                  </Button>
+                </>
               )}
             </div>
           </div>

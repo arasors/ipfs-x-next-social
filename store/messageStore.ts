@@ -5,7 +5,6 @@ import { persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, Message } from '@/models/Message';
 import { useNotificationStore } from './notificationStore';
-import { saveChat, saveMessage } from '@/lib/orbitdb-messages';
 
 export interface MessageState {
   chats: Record<string, Chat>;
@@ -96,11 +95,6 @@ export const useMessageStore = create<MessageState>()(
             }
           }));
           
-          // Yeni sohbeti OrbitDB'ye kaydet
-          saveChat(newChat).catch(error => 
-            console.error('Error saving new self-chat to OrbitDB:', error)
-          );
-          
           return newChat;
         }
         
@@ -135,11 +129,6 @@ export const useMessageStore = create<MessageState>()(
           }
         }));
         
-        // Yeni sohbeti OrbitDB'ye kaydet
-        saveChat(newChat).catch(error => 
-          console.error('Error saving new chat to OrbitDB:', error)
-        );
-        
         return newChat;
       },
       
@@ -172,8 +161,6 @@ export const useMessageStore = create<MessageState>()(
           mediaItems
         };
         
-        // In a real app, we'd send this to an API/backend
-        
         // Update messages
         const updatedMessages = {
           ...messages,
@@ -204,16 +191,6 @@ export const useMessageStore = create<MessageState>()(
           chats: updatedChats
         });
         
-        // Mesajı OrbitDB'ye kaydet
-        saveMessage(newMessage).catch(error => 
-          console.error('Error saving message to OrbitDB:', error)
-        );
-        
-        // Güncellenmiş sohbeti OrbitDB'ye kaydet
-        saveChat(updatedChats[chatId]).catch(error => 
-          console.error('Error saving updated chat to OrbitDB:', error)
-        );
-        
         // Use notification system to notify recipient
         const notificationStore = useNotificationStore.getState();
         notificationStore.addNotification({
@@ -222,6 +199,27 @@ export const useMessageStore = create<MessageState>()(
           message: `You have a new message from ${currentUserAddress}`,
           recipientAddress: recipientAddress
         });
+        
+        // Push changes to API
+        try {
+          const response = await fetch('/api/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: { [chatId]: [newMessage] },
+              chats: { [chatId]: updatedChats[chatId] },
+              userAddress: currentUserAddress
+            })
+          });
+          
+          if (!response.ok) {
+            console.error('Failed to sync message with API:', await response.text());
+          }
+        } catch (error) {
+          console.error('Error syncing message with API:', error);
+        }
         
         return Promise.resolve();
       },
@@ -249,30 +247,35 @@ export const useMessageStore = create<MessageState>()(
           unreadCount: 0
         };
         
-        set(state => ({
+        set({
           messages: {
-            ...state.messages,
+            ...messages,
             [chatId]: updatedMessages
           },
           chats: {
-            ...state.chats,
+            ...chats,
             [chatId]: updatedChat
-          }
-        }));
-        
-        // Okundu olarak işaretlenen mesajları OrbitDB'ye kaydet
-        updatedMessages.forEach(message => {
-          if (message.read) {
-            saveMessage(message).catch(error => 
-              console.error(`Error saving read status for message ${message.id} to OrbitDB:`, error)
-            );
           }
         });
         
-        // Güncellenen sohbeti OrbitDB'ye kaydet
-        saveChat(updatedChat).catch(error => 
-          console.error(`Error saving updated chat ${chatId} to OrbitDB:`, error)
-        );
+        // Push changes to API
+        try {
+          fetch('/api/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: { [chatId]: updatedMessages },
+              chats: { [chatId]: updatedChat },
+              userAddress: currentUserAddress
+            })
+          }).catch(error => 
+            console.error('Error syncing read status with API:', error)
+          );
+        } catch (error) {
+          console.error('Error preparing to sync read status with API:', error);
+        }
       },
       
       deleteMessage: (chatId: string, messageId: string) => {
@@ -282,65 +285,123 @@ export const useMessageStore = create<MessageState>()(
         
         if (!chat || !chatMessages.length) return;
         
-        // Filter out the message to delete
-        const updatedMessages = chatMessages.filter(message => message.id !== messageId);
+        const currentUserAddress = localStorage.getItem('walletAddress');
+        if (!currentUserAddress) return;
         
-        // Update the last message if needed
+        // Find message index
+        const messageIndex = chatMessages.findIndex(m => m.id === messageId);
+        if (messageIndex === -1) return;
+        
+        // Check if user is authorized to delete (only sender can delete)
+        const message = chatMessages[messageIndex];
+        if (message.senderAddress !== currentUserAddress) {
+          console.error('Unauthorized to delete this message');
+          return;
+        }
+        
+        // Remove the message
+        const updatedMessages = [
+          ...chatMessages.slice(0, messageIndex),
+          ...chatMessages.slice(messageIndex + 1)
+        ];
+        
+        // Update the last message in chat if needed
         let updatedChat = { ...chat };
-        
-        // If we're deleting the last message, update the lastMessage property
-        if (chatMessages.length > 0 && 
-            chatMessages[chatMessages.length - 1].id === messageId && 
-            updatedMessages.length > 0) {
+        if (chat.lastMessage && chat.lastMessage.timestamp === message.timestamp) {
+          // Find the new last message
+          const newLastMessage = [...updatedMessages].sort((a, b) => b.timestamp - a.timestamp)[0];
           
-          const newLastMessage = updatedMessages[updatedMessages.length - 1];
-          updatedChat = {
-            ...chat,
-            lastMessage: {
-              content: newLastMessage.content || (newLastMessage.mediaItems?.length ? 'Sent media' : ''),
-              timestamp: newLastMessage.timestamp,
-              senderAddress: newLastMessage.senderAddress
-            }
-          };
+          if (newLastMessage) {
+            updatedChat = {
+              ...chat,
+              lastMessage: {
+                content: newLastMessage.content,
+                timestamp: newLastMessage.timestamp,
+                senderAddress: newLastMessage.senderAddress
+              }
+            };
+          } else {
+            // No messages left
+            const { lastMessage, ...chatWithoutLastMessage } = chat;
+            updatedChat = chatWithoutLastMessage as Chat;
+          }
         }
         
-        // If all messages are deleted, clear lastMessage
-        if (updatedMessages.length === 0) {
-          updatedChat = {
-            ...chat,
-            lastMessage: undefined
-          };
-        }
-        
-        set(state => ({
+        // Update state
+        set({
           messages: {
-            ...state.messages,
+            ...messages,
             [chatId]: updatedMessages
           },
           chats: {
-            ...state.chats,
+            ...chats,
             [chatId]: updatedChat
           }
-        }));
+        });
+        
+        // Push changes to API
+        try {
+          fetch('/api/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: { [chatId]: updatedMessages },
+              chats: { [chatId]: updatedChat },
+              userAddress: currentUserAddress
+            })
+          }).catch(error => 
+            console.error('Error syncing message deletion with API:', error)
+          );
+        } catch (error) {
+          console.error('Error preparing to sync message deletion with API:', error);
+        }
       },
       
       deleteChat: (chatId: string) => {
-        const { chats, messages, selectedChatId } = get();
+        const { chats, messages } = get();
         
-        // Create a new chats object without the deleted chat
+        if (!chats[chatId]) return;
+        
+        const currentUserAddress = localStorage.getItem('walletAddress');
+        if (!currentUserAddress) return;
+        
+        // Check if user is a participant in the chat
+        if (!chats[chatId].participants.includes(currentUserAddress)) {
+          console.error('Unauthorized to delete this chat');
+          return;
+        }
+        
+        // Create copies of state without the deleted chat
         const { [chatId]: deletedChat, ...remainingChats } = chats;
-        
-        // Create a new messages object without the messages from deleted chat
         const { [chatId]: deletedMessages, ...remainingMessages } = messages;
         
-        // Update selected chat if needed
-        const newSelectedChatId = selectedChatId === chatId ? null : selectedChatId;
-        
+        // Update state
         set({
           chats: remainingChats,
           messages: remainingMessages,
-          selectedChatId: newSelectedChatId
+          selectedChatId: get().selectedChatId === chatId ? null : get().selectedChatId
         });
+        
+        // Push changes to API
+        try {
+          fetch('/api/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              // Simply set the user's chat list - with the deleted chat removed
+              chats: remainingChats,
+              userAddress: currentUserAddress
+            })
+          }).catch(error => 
+            console.error('Error syncing chat deletion with API:', error)
+          );
+        } catch (error) {
+          console.error('Error preparing to sync chat deletion with API:', error);
+        }
       },
       
       editMessage: (chatId: string, messageId: string, newContent: string) => {
@@ -350,24 +411,29 @@ export const useMessageStore = create<MessageState>()(
         
         if (!chat || !chatMessages.length) return;
         
-        // Find the message to edit
-        const messageIndex = chatMessages.findIndex(message => message.id === messageId);
+        const currentUserAddress = localStorage.getItem('walletAddress');
+        if (!currentUserAddress) return;
+        
+        // Find message index
+        const messageIndex = chatMessages.findIndex(m => m.id === messageId);
         if (messageIndex === -1) return;
         
+        // Check if user is authorized to edit (only sender can edit)
         const message = chatMessages[messageIndex];
+        if (message.senderAddress !== currentUserAddress) {
+          console.error('Unauthorized to edit this message');
+          return;
+        }
         
-        // Make sure the user can only edit their own messages
-        const currentUserAddress = localStorage.getItem('walletAddress');
-        if (message.senderAddress !== currentUserAddress) return;
-        
-        // Store the original message in edit history
+        // Save current content to edit history
+        const currentContent = message.content;
         const editHistory = message.editHistory || [];
         editHistory.push({
-          content: message.content,
+          content: currentContent,
           timestamp: Date.now()
         });
         
-        // Create the updated message
+        // Update the message
         const updatedMessage: Message = {
           ...message,
           content: newContent,
@@ -375,49 +441,74 @@ export const useMessageStore = create<MessageState>()(
           editHistory
         };
         
-        // Update the messages array
-        const updatedMessages = [...chatMessages];
-        updatedMessages[messageIndex] = updatedMessage;
+        const updatedMessages = [
+          ...chatMessages.slice(0, messageIndex),
+          updatedMessage,
+          ...chatMessages.slice(messageIndex + 1)
+        ];
         
-        // Update the last message if needed
+        // Update the last message in chat if needed
         let updatedChat = { ...chat };
-        if (chatMessages.length > 0 && 
-            chatMessages[chatMessages.length - 1].id === messageId) {
-          
+        if (chat.lastMessage && 
+            chat.lastMessage.timestamp === message.timestamp &&
+            chat.lastMessage.senderAddress === message.senderAddress) {
           updatedChat = {
             ...chat,
             lastMessage: {
-              content: newContent || (updatedMessage.mediaItems?.length ? 'Sent media' : ''),
-              timestamp: message.timestamp,
-              senderAddress: message.senderAddress
+              ...chat.lastMessage,
+              content: newContent
             }
           };
         }
         
-        set(state => ({
+        // Update state
+        set({
           messages: {
-            ...state.messages,
+            ...messages,
             [chatId]: updatedMessages
           },
           chats: {
-            ...state.chats,
+            ...chats,
             [chatId]: updatedChat
           }
-        }));
+        });
+        
+        // Push changes to API
+        try {
+          fetch('/api/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: { [chatId]: updatedMessages },
+              chats: { [chatId]: updatedChat },
+              userAddress: currentUserAddress
+            })
+          }).catch(error => 
+            console.error('Error syncing message edit with API:', error)
+          );
+        } catch (error) {
+          console.error('Error preparing to sync message edit with API:', error);
+        }
       },
       
       getMessageEditHistory: (chatId: string, messageId: string) => {
         const { messages } = get();
         const chatMessages = messages[chatId] || [];
         
-        const message = chatMessages.find(message => message.id === messageId);
+        const message = chatMessages.find(m => m.id === messageId);
         if (!message || !message.editHistory) return null;
         
         return message.editHistory;
       }
     }),
     {
-      name: 'message-store',
+      name: 'message-storage',
+      onRehydrateStorage: () => {
+        // Log that the store has been rehydrated
+        console.log('Message store rehydrated');
+      }
     }
   )
 ); 

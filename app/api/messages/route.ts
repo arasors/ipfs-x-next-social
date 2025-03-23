@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     ) as Chat[];
     
     // Update chats cache
-    userOwnedChats.forEach((chat: Chat) => {
+    for (const chat of userOwnedChats) {
       // If the chat already exists, merge with existing chat data
       if (chatsCache[chat.id]) {
         const existingChat = chatsCache[chat.id];
@@ -94,14 +94,14 @@ export async function POST(request: Request) {
         // New chat
         chatsCache[chat.id] = chat;
       }
-    });
+    }
     
     // Update messages cache
-    Object.entries(messages || {}).forEach(([chatId, chatMessages]: [string, any]) => {
+    for (const [chatId, chatMessages] of Object.entries(messages || {})) {
       // Check if this chat belongs to the user
       const chat = chatsCache[chatId];
       if (!chat || !chat.participants.includes(userAddress)) {
-        return; // Skip if chat doesn't exist or user is not a participant
+        continue; // Skip if chat doesn't exist or user is not a participant
       }
       
       // Initialize messages array for this chat if it doesn't exist
@@ -110,16 +110,16 @@ export async function POST(request: Request) {
       }
       
       // Add each message, avoiding duplicates by ID
-      chatMessages.forEach((message: Message) => {
+      for (const message of chatMessages as Message[]) {
         // Skip if message already exists
         if (!messagesCache[chatId].some(m => m.id === message.id)) {
           messagesCache[chatId].push(message);
         }
-      });
+      }
       
       // Sort messages by timestamp
       messagesCache[chatId].sort((a, b) => a.timestamp - b.timestamp);
-    });
+    }
     
     return NextResponse.json({
       success: true,

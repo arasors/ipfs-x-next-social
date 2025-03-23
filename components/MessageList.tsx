@@ -81,8 +81,9 @@ export function MessageList({ chats, selectedChatId, onSelectChat, isLoading = f
       
       const profile = participantProfiles[otherParticipant];
       
-      // Check if search term is in participant name
+      // Check if search term is in participant name or nickname
       const nameMatch = 
+        (profile?.nickname?.toLowerCase().includes(searchLower)) ||
         (profile?.displayName?.toLowerCase().includes(searchLower)) ||
         (profile?.username?.toLowerCase().includes(searchLower));
       
@@ -118,7 +119,12 @@ export function MessageList({ chats, selectedChatId, onSelectChat, isLoading = f
     
     const profile = participantProfiles[otherParticipant];
     if (!profile) return otherParticipant.substring(0, 8) + '...';
-    return profile.displayName || profile.username || otherParticipant.substring(0, 8) + '...';
+    
+    // Return nickname first if available
+    return profile.nickname || 
+           profile.displayName || 
+           profile.username || 
+           otherParticipant.substring(0, 8) + '...';
   };
   
   if (isLoading) {
@@ -215,12 +221,12 @@ export function MessageList({ chats, selectedChatId, onSelectChat, isLoading = f
                 <AvatarImage 
                   src={profile?.profileImageCID ? 
                     `https://ipfs.io/ipfs/${profile.profileImageCID}` : 
-                    undefined
+                    `https://avatar.vercel.sh/${chat.participants[0]}`
                   } 
                 />
                 <AvatarFallback>
                   {isSelfChat && <User className="h-5 w-5" />}
-                  {!isSelfChat && (profile?.displayName?.[0] || profile?.username?.[0] || '?')}
+                  {!isSelfChat && (profile?.nickname?.[0] || profile?.displayName?.[0] || profile?.username?.[0] || '?')}
                 </AvatarFallback>
               </Avatar>
               

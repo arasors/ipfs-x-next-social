@@ -500,7 +500,7 @@ export const getJson = async (cidStr: string): Promise<any | null> => {
     const j = json(helia);
     return await j.get(cid);
   } catch (error) {
-    console.error('Failed to get JSON:', error);
+    //console.error('Failed to get JSON:', error);
     return null;
   }
 };

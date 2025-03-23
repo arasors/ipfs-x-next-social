@@ -41,6 +41,9 @@ import { BackButton } from '@/components/BackButton';
 import { Loader2 } from 'lucide-react';
 import { syncMessages } from '@/lib/syncMessages';
 import { Message } from '@/models/Message';
+import { EditNicknameDialog } from '@/components/EditNicknameDialog';
+import { useUserStore } from '@/store/userStore';
+import { UserProfile } from '@/models/User';
 
 type ConversationViewProps = {
   chatId?: string;
@@ -62,6 +65,7 @@ export function ConversationView({ chatId }: ConversationViewProps) {
   const [confirmDeleteMessage, setConfirmDeleteMessage] = useState<string | null>(null);
   const [confirmDeleteChat, setConfirmDeleteChat] = useState(false);
   const [isFetchingMessages, setIsFetchingMessages] = useState(false);
+  const [nicknameDialogOpen, setNicknameDialogOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -78,6 +82,8 @@ export function ConversationView({ chatId }: ConversationViewProps) {
     sendMessage,
     getMessageEditHistory
   } = useMessageStore();
+  
+  const { getUserProfile, getContactNickname } = useUserStore();
   
   // Kullanıcının bilgilerini localStorage'dan alıyoruz çünkü userStore'a tam erişimimiz yok
   const userAddress = localStorage.getItem('walletAddress') || '';
@@ -105,6 +111,10 @@ export function ConversationView({ chatId }: ConversationViewProps) {
   ) || '';
   
   const recipient = usersByAddress[recipientAddress] || { address: recipientAddress };
+  
+  // Get user profile to access nickname
+  const userProfile = getUserProfile ? getUserProfile(recipientAddress) : null;
+  const contactNickname = userProfile?.nickname || getContactNickname?.(recipientAddress);
   
   useEffect(() => {
     if (resolvedChatId && resolvedChatId !== selectedChatId) {
@@ -287,11 +297,17 @@ export function ConversationView({ chatId }: ConversationViewProps) {
         </div>
         
         {recipient ? (
-          <ContactCard 
-            user={recipient} 
-            compact
-            showStatus
-          />
+          <div className="flex justify-between items-center w-full">
+            <ContactCard 
+              user={{
+                ...recipient,
+                nickname: contactNickname
+              }}
+              compact
+              showStatus
+              onEditNickname={() => setNicknameDialogOpen(true)}
+            />
+          </div>
         ) : (
           <div className="flex items-center space-x-2">
             <div className="bg-muted w-10 h-10 rounded-full"></div>
@@ -339,11 +355,7 @@ export function ConversationView({ chatId }: ConversationViewProps) {
         <div ref={messagesEndRef} />
       </div>
       
-      {/* Input */}
-      <ChatInput
-        chatId={resolvedChatId}
-        recipientAddress={recipientAddress}
-      />
+      
       
       {/* Edit history dialog */}
       <Dialog open={showEditHistory !== null} onOpenChange={(open) => !open && setShowEditHistory(null)}>
@@ -509,6 +521,14 @@ export function ConversationView({ chatId }: ConversationViewProps) {
           onChangeIndex={setLightboxIndex}
         />
       )}
+      
+      {/* Nickname Dialog */}
+      <EditNicknameDialog
+        open={nicknameDialogOpen}
+        onOpenChange={setNicknameDialogOpen}
+        address={recipientAddress}
+        initialNickname={contactNickname}
+      />
     </div>
   );
 } 

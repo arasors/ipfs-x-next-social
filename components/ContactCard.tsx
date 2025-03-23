@@ -1,12 +1,13 @@
 import React from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { formatDistanceToNow } from 'date-fns';
-import { Check, MoreHorizontal } from 'lucide-react';
+import { Check, MoreHorizontal, Edit } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
@@ -14,6 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useUserStore } from '@/store/userStore';
 
 type ContactCardProps = {
   user: {
@@ -22,9 +24,11 @@ type ContactCardProps = {
     avatar?: string;
     status?: 'online' | 'offline' | 'away';
     lastSeen?: number;
+    nickname?: string;
   };
   onMessageClick?: () => void;
   onProfileClick?: () => void;
+  onEditNickname?: (address: string) => void;
   compact?: boolean;
   showStatus?: boolean;
   actions?: React.ReactNode;
@@ -35,16 +39,22 @@ export function ContactCard({
   user,
   onMessageClick,
   onProfileClick,
+  onEditNickname,
   compact = false,
   showStatus = false,
   actions,
   selected = false,
 }: ContactCardProps) {
-  // Format user display name
-  const displayName = user.name || (user.address ? `${user.address.slice(0, 6)}...${user.address.slice(-4)}` : 'Unknown');
+  const { getContactNickname } = useUserStore();
+  
+  // Get nickname if available
+  const nickname = user.nickname || getContactNickname?.(user.address);
+  
+  // Format user display name with nickname prioritized
+  const displayName = nickname || user.name || (user.address ? `${user.address.slice(0, 6)}...${user.address.slice(-4)}` : 'Unknown');
   
   // Get avatar fallback (first letter of name or address)
-  const avatarFallback = (user.name?.charAt(0) || user.address?.charAt(0) || '?').toUpperCase();
+  const avatarFallback = ((nickname || user.name)?.charAt(0) || user.address?.charAt(0) || '?').toUpperCase();
   
   // Format last seen time if available
   const lastSeenText = user.lastSeen 
@@ -57,6 +67,13 @@ export function ContactCard({
     offline: 'bg-gray-400',
     away: 'bg-yellow-500',
   }[user.status || 'offline'];
+  
+  const handleEditNickname = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onEditNickname) {
+      onEditNickname(user.address);
+    }
+  };
   
   return (
     <div 
@@ -81,6 +98,18 @@ export function ContactCard({
         <div className="flex items-center justify-between">
           <p className={`font-medium truncate ${compact ? 'text-sm' : 'text-base'}`}>
             {displayName}
+            {nickname && !compact && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="ml-1 text-xs text-muted-foreground">(Nickname)</span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>This is a custom nickname you set</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </p>
           
           {selected && (
@@ -109,7 +138,7 @@ export function ContactCard({
       )}
       
       {/* Default actions dropdown if no custom actions provided */}
-      {!actions && onMessageClick && (
+      {!actions && (onMessageClick || onEditNickname) && (
         <div onClick={(e) => e.stopPropagation()}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -118,12 +147,22 @@ export function ContactCard({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onMessageClick}>
-                Message
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onProfileClick}>
-                View Profile
-              </DropdownMenuItem>
+              {onMessageClick && (
+                <DropdownMenuItem onClick={onMessageClick}>
+                  Message
+                </DropdownMenuItem>
+              )}
+              {onEditNickname && (
+                <DropdownMenuItem onClick={handleEditNickname}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Set Nickname
+                </DropdownMenuItem>
+              )}
+              {onProfileClick && (
+                <DropdownMenuItem onClick={onProfileClick}>
+                  View Profile
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

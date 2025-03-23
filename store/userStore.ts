@@ -1,7 +1,9 @@
+"use client";
+
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import { User, UserProfile } from '@/models/User';
+import { User, UserProfile, Contact } from '@/models/User';
 import { useNotificationStore } from './notificationStore';
 
 interface UserState {
@@ -21,6 +23,13 @@ interface UserState {
   getFollowers: (address: string) => string[];
   getFollowing: (address: string) => string[];
   fetchUsersByAddresses: (addresses: string[]) => Promise<void>;
+  
+  // Contact nickname management
+  addContact: (address: string, nickname?: string) => void;
+  updateContactNickname: (address: string, nickname: string) => void;
+  removeContact: (address: string) => void;
+  getContactNickname: (address: string) => string | undefined;
+  getContacts: () => Contact[];
   
   // Helper functions
   reset: () => void;
@@ -72,6 +81,7 @@ export const useUserStore = create<UserState>()(
           posts: [],
           following: [],
           followers: [],
+          contacts: {},
           createdAt: Date.now(),
           updatedAt: Date.now()
         };
@@ -102,6 +112,12 @@ export const useUserStore = create<UserState>()(
           };
         }
         
+        // Get nickname if this is a contact
+        let nickname: string | undefined;
+        if (currentUser && currentUser.contacts[userId]) {
+          nickname = currentUser.contacts[userId].nickname;
+        }
+        
         const profile: UserProfile = {
           address: user.address,
           username: user.username,
@@ -113,7 +129,8 @@ export const useUserStore = create<UserState>()(
           followersCount: user.followersCount,
           postCount: user.posts.length,
           isCurrentUser: currentUser?.address === userId,
-          isFollowing: currentUser ? user.followers.includes(currentUser.address) : false
+          isFollowing: currentUser ? user.followers.includes(currentUser.address) : false,
+          nickname
         };
         
         return profile;
@@ -227,6 +244,116 @@ export const useUserStore = create<UserState>()(
         return user.following;
       },
       
+      // Contact nickname management
+      addContact: (address, nickname) => {
+        const { currentUser } = get();
+        if (!currentUser) return;
+        
+        // Create a contact entry
+        const contact: Contact = {
+          address,
+          nickname,
+          addedAt: Date.now()
+        };
+        
+        // Update user's contacts
+        const updatedContacts = {
+          ...currentUser.contacts,
+          [address]: contact
+        };
+        
+        // Update current user
+        const updatedUser = {
+          ...currentUser,
+          contacts: updatedContacts,
+          updatedAt: Date.now()
+        };
+        
+        set((state) => ({
+          currentUser: updatedUser,
+          users: {
+            ...state.users,
+            [currentUser.address]: updatedUser
+          }
+        }));
+        
+        // Also make sure the contact's user object exists
+        get().getOrCreateUser(address);
+      },
+      
+      updateContactNickname: (address, nickname) => {
+        const { currentUser } = get();
+        if (!currentUser) return;
+        
+        // If contact doesn't exist yet, add it
+        if (!currentUser.contacts[address]) {
+          get().addContact(address, nickname);
+          return;
+        }
+        
+        // Update existing contact
+        const updatedContact = {
+          ...currentUser.contacts[address],
+          nickname
+        };
+        
+        // Update user's contacts
+        const updatedContacts = {
+          ...currentUser.contacts,
+          [address]: updatedContact
+        };
+        
+        // Update current user
+        const updatedUser = {
+          ...currentUser,
+          contacts: updatedContacts,
+          updatedAt: Date.now()
+        };
+        
+        set((state) => ({
+          currentUser: updatedUser,
+          users: {
+            ...state.users,
+            [currentUser.address]: updatedUser
+          }
+        }));
+      },
+      
+      removeContact: (address) => {
+        const { currentUser } = get();
+        if (!currentUser || !currentUser.contacts[address]) return;
+        
+        // Create a copy without the removed contact
+        const { [address]: removedContact, ...remainingContacts } = currentUser.contacts;
+        
+        // Update current user
+        const updatedUser = {
+          ...currentUser,
+          contacts: remainingContacts,
+          updatedAt: Date.now()
+        };
+        
+        set((state) => ({
+          currentUser: updatedUser,
+          users: {
+            ...state.users,
+            [currentUser.address]: updatedUser
+          }
+        }));
+      },
+      
+      getContactNickname: (address) => {
+        const { currentUser } = get();
+        if (!currentUser || !currentUser.contacts[address]) return undefined;
+        return currentUser.contacts[address].nickname;
+      },
+      
+      getContacts: () => {
+        const { currentUser } = get();
+        if (!currentUser) return [];
+        return Object.values(currentUser.contacts);
+      },
+      
       fetchUsersByAddresses: async (addresses: string[]) => {
         set(state => ({ loading: true }));
         
@@ -248,23 +375,25 @@ export const useUserStore = create<UserState>()(
               ...state.users,
               ...newUsers
             },
-            loading: false 
+            loading: false
           }));
         } catch (error) {
           console.error('Error fetching users:', error);
           set(state => ({ loading: false }));
         }
-        
-        return Promise.resolve();
       },
       
       reset: () => {
-        set({ currentUser: null });
-        localStorage.removeItem('walletAddress');
+        set({
+          currentUser: null,
+          users: {},
+          loading: false
+        });
       }
     }),
     {
-      name: 'user-storage',
+      name: 'user-store',
+      storage: createJSONStorage(() => localStorage)
     }
   )
 ); 

@@ -185,9 +185,6 @@ importers:
       i18next-http-backend:
         specifier: ^3.0.2
         version: 3.0.2(encoding@0.1.13)
-      ipfs:
-        specifier: ^0.66.1
-        version: 0.66.1(bufferutil@4.0.9)(encoding@0.1.13)(utf-8-validate@5.0.10)
       js-cookie:
         specifier: ^3.0.5
         version: 3.0.5

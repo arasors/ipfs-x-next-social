@@ -1,17 +1,16 @@
 import { useState, useRef, FormEvent, KeyboardEvent } from 'react';
 import { 
-  Input, 
-  Button, 
   Form,
   FormControl,
   FormField,
   FormItem
-} from '@/components/ui';
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { useUserStore } from '@/store/userStore';
 import { useMessageStore } from '@/store/messageStore';
 import { Send } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 type ChatInputProps = {
   chatId: string;
@@ -23,11 +22,12 @@ type FormValues = {
 };
 
 export function ChatInput({ chatId, recipientAddress }: ChatInputProps) {
-  const { user } = useUserStore();
+
+  const { currentUser:user } = useUserStore();
   const { sendMessage } = useMessageStore();
   const [isSending, setIsSending] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  const { ref: focusTrapRef } = useFocusTrap();
+  const focusTrapRef = useRef(null);
 
   const form = useForm<FormValues>({
     defaultValues: {
@@ -46,10 +46,7 @@ export function ChatInput({ chatId, recipientAddress }: ChatInputProps) {
       // Send the message - this now saves to OrbitDB in the messageStore.ts implementation
       await sendMessage({
         chatId,
-        from: user.address,
-        to: recipientAddress,
         content: values.message.trim(),
-        timestamp: Date.now(),
       });
 
       form.reset();

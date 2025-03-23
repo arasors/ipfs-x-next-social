@@ -8,7 +8,6 @@ import { ConversationView } from '@/components/ConversationView';
 import { NewMessageButton } from '@/components/NewMessageButton';
 import { AuthGuard } from '@/components/AuthGuard';
 import { syncMessages } from '@/lib/syncMessages';
-import { initMessageDB } from '@/lib/orbitdb-messages';
 import { Loader2 } from 'lucide-react';
 
 export default function MessagesPage() {
@@ -25,15 +24,12 @@ export default function MessagesPage() {
       setIsSyncing(true);
       
       try {
-        console.log('Mesajlar yükleniyor...');
+        console.log('Loading messages...');
         
-        // OrbitDB'yi başlat
-        await initMessageDB();
-        
-        // Önce yerel verileri yükle (hızlı UI güncellemesi için)
+        // First load local data (for quick UI updates)
         await fetchChats();
         
-        // Sonra sunucu ve OrbitDB ile senkronize et
+        // Sync with server via API
         const newSyncTime = await syncMessages(lastSyncTime);
         setLastSyncTime(newSyncTime);
         
@@ -50,7 +46,7 @@ export default function MessagesPage() {
           await fetchUserData(Array.from(participantAddresses));
         }
         
-        console.log('Mesajlar başarıyla yüklendi');
+        console.log('Messages loaded successfully');
       } catch (error) {
         console.error('Error loading chats:', error);
       } finally {
@@ -65,7 +61,7 @@ export default function MessagesPage() {
     const intervalId = setInterval(async () => {
       try {
         setIsSyncing(true);
-        // Sync with the server and OrbitDB periodically
+        // Sync with the server and API periodically
         const newSyncTime = await syncMessages(lastSyncTime);
         setLastSyncTime(newSyncTime);
       } catch (error) {
@@ -76,7 +72,7 @@ export default function MessagesPage() {
     }, 30000); // Sync every 30 seconds
     
     return () => clearInterval(intervalId);
-  }, [fetchChats, fetchUserData, lastSyncTime]);
+  }, [fetchChats, fetchUserData, lastSyncTime, chats]);
   
   return (
     <AuthGuard>
@@ -84,7 +80,7 @@ export default function MessagesPage() {
         {isSyncing && (
           <div className="absolute top-1 right-1 z-10 flex items-center bg-background/80 text-xs text-muted-foreground rounded p-1">
             <Loader2 className="h-3 w-3 animate-spin mr-1" />
-            <span>Mesajlar senkronize ediliyor...</span>
+            <span>Syncing messages...</span>
           </div>
         )}
         
